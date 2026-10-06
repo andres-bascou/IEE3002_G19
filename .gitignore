@@ -2,8 +2,6 @@ __pycache__/
 *.pyc
 .venv/
 env/
-results/
 outputs/
 *.log
 *.code-workspace
-*.xlsx
