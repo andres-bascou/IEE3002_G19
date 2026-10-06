@@ -1,11 +1,9 @@
-# Virtual environment
-.venv/
-
-# Python
 __pycache__/
-*.py[cod]
-.ipynb_checkpoints/
-
-# OS / editor
-.DS_Store
-.vscode/
+*.pyc
+.venv/
+env/
+results/
+outputs/
+*.log
+*.code-workspace
+*.xlsx
