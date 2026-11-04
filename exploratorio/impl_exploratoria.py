@@ -11,6 +11,7 @@ Fuente de los datos:
 
 Requisitos:  pip install pandapower
 """
+import os
 import pandas as pd
 import pandapower as pp
 import pandapower.networks as pn
@@ -71,7 +72,9 @@ print(f"  Pérdidas = {net.res_line.pl_mw.sum() * 1000:.1f} kW")
 print(f"  Importación subestación = {net.res_ext_grid.p_mw.iloc[0]:.3f} MW")
 
 # --- Exportar tablas para la implementación ----------------------------------
-ramas.to_csv("ieee33_ramas.csv", index=False)
-cargas.to_csv("ieee33_cargas.csv", index=False)
+# OJO: NO usar rutas absolutas; se guarda junto a este script (carpeta exploratorio/).
+OUT_DIR = os.path.dirname(os.path.abspath(__file__))
+ramas.to_csv(os.path.join(OUT_DIR, "ieee33_ramas.csv"), index=False)
+cargas.to_csv(os.path.join(OUT_DIR, "ieee33_cargas.csv"), index=False)
 print("\nGuardado: ieee33_ramas.csv, ieee33_cargas.csv")
 print(ramas.head()) 

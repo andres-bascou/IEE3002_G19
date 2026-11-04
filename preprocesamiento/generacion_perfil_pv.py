@@ -3,8 +3,10 @@ import numpy as np
 import pandas as pd
 
 # 1. Rutas
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-csv_path = os.path.join(BASE_DIR, "DHC_PV_MX1701.csv")
+# OJO: NO usar rutas absolutas (p.ej. r"C:\Users\..." o "/Users/..."): solo funcionan en un PC.
+# Se resuelve la raíz del proyecto relativa a este archivo (<raíz>/<carpeta>/este_script.py).
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # raíz del proyecto
+csv_path = os.path.join(BASE_DIR, "data", "raw", "DHC_PV_MX1701.csv")
 
 if not os.path.exists(csv_path):
     raise FileNotFoundError(f"No se encontró el archivo en: {csv_path}")

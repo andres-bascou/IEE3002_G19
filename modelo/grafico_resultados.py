@@ -1,6 +1,6 @@
 """
-plot_results.py
-===============
+modelo/grafico_resultados.py
+============================
 Graficación de los resultados del modelo MISOCP de Hosting Capacity (PV + BESS).
 
 Lee el JSON generado por `save_results()` de misocp_hc_bess.py, por lo que:
@@ -21,13 +21,13 @@ Figuras
 
 Uso
 ---
-    # desde la terminal, en la carpeta del proyecto (usa el JSON más reciente de results/)
-    python plot_results.py
-    python plot_results.py results/hc_bess_results_m7_20260101_120000.json
+    # desde la terminal, en la raíz del proyecto (usa el JSON más reciente de results/)
+    python3.10 modelo/grafico_resultados.py
+    python3.10 modelo/grafico_resultados.py results/hc_bess_results_m7_20260101_120000.json
 
     # desde Python, justo después de optimizar
-    from misocp_hc_bess import HCConfig, run_hc_bess
-    from plot_results import plot_all
+    from modelo.misocp_hc_bess import HCConfig, run_hc_bess
+    from modelo.grafico_resultados import plot_all
     out = run_hc_bess(HCConfig(month=7))
     plot_all(out["results_path"])
 """
@@ -101,9 +101,10 @@ def resolve_results_dir(results_dir: Optional[str | Path] = None) -> Path:
          1. argumento results_dir
          2. variable de entorno HC_RESULTS_DIR
          3. <carpeta de este archivo>/results
-         4. <carpeta padre de este archivo>/results   (si este archivo está en /models)
+         4. <carpeta padre de este archivo>/results   (este archivo está en /modelo)
          5. ./results  (directorio de trabajo actual)
     """
+    # OJO: NO usar rutas absolutas (p.ej. r"C:\Users\..."); todo se resuelve relativo a este archivo.
     here = Path(__file__).resolve().parent
     candidates = []
     if results_dir:

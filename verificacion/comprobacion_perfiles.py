@@ -4,8 +4,12 @@ import numpy as np
 import pandas as pd
 
 # Rutas
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# OJO: NO usar rutas absolutas (p.ej. r"C:\Users\..." o "/Users/..."): solo funcionan en un PC.
+# Se resuelve la raíz del proyecto relativa a este archivo (<raíz>/<carpeta>/este_script.py).
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # raíz del proyecto
 PROFILES_DIR = os.path.join(BASE_DIR, "data", "pv_profiles")
+FIG_DIR = os.path.join(BASE_DIR, "results", "figures")
+os.makedirs(FIG_DIR, exist_ok=True)
 csv_consolidado = os.path.join(PROFILES_DIR, "alpha_t_mensual_anual.csv")
 
 if not os.path.exists(csv_consolidado):
@@ -44,7 +48,7 @@ plt.grid(True, linestyle="--", alpha=0.6)
 plt.legend(frameon=True, loc="upper right")
 plt.tight_layout()
 
-fig1_path = os.path.join(PROFILES_DIR, "verificacion_estacional.png")
+fig1_path = os.path.join(FIG_DIR, "verificacion_estacional.png")
 plt.savefig(fig1_path, dpi=300)
 print(f"Gráfico estacional guardado en: {fig1_path}")
 
@@ -72,7 +76,7 @@ plt.xticks(ticks=range(12), labels=df_perfiles.columns, rotation=45, ha="right")
 plt.yticks(np.arange(0, 24, 2))
 plt.tight_layout()
 
-fig2_path = os.path.join(PROFILES_DIR, "verificacion_heatmap.png")
+fig2_path = os.path.join(FIG_DIR, "verificacion_heatmap.png")
 plt.savefig(fig2_path, dpi=300)
 print(f"Heatmap anual guardado en: {fig2_path}")
 
