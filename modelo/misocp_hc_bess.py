@@ -1,5 +1,5 @@
 """
-models/misocp_hc_bess.py
+modelo/misocp_hc_bess.py
 ========================
 Hosting Capacity (HC) con PV + BESS en redes de distribución radiales.
 
@@ -12,7 +12,8 @@ Estado de red               : v, l, P_br, Q_br, P_S, Q_S
 
 Uso rápido
 ----------
-    from models.misocp_hc_bess import HCConfig, run_hc_bess
+    # desde la raíz del proyecto:  python3.10 modelo/misocp_hc_bess.py
+    from modelo.misocp_hc_bess import HCConfig, run_hc_bess
     res = run_hc_bess(HCConfig(month=7, n_pv_max=3, n_bess_max=2))
     print(res["summary"])
 
@@ -21,7 +22,7 @@ Portabilidad de rutas
 La carpeta de datos se resuelve (en este orden) con:
     1. argumento `data_dir` / `HCConfig.data_dir`
     2. variable de entorno HC_DATA_DIR
-    3. <raíz_del_proyecto>/data   (raíz = carpeta padre de /models)
+    3. <raíz_del_proyecto>/data   (raíz = carpeta padre de /modelo)
     4. ./data  (directorio de trabajo actual)
 Nunca se usan rutas absolutas, así que funciona en cualquier PC.
 
@@ -122,6 +123,7 @@ class HCConfig:
 # 2. CARGA DE DATOS (pandas)
 # =============================================================================
 def resolve_data_dir(data_dir: Optional[str] = None) -> Path:
+    # OJO: NO usar rutas absolutas (p.ej. r"C:\Users\..."); todo se resuelve relativo a este archivo.
     candidates = []
     if data_dir:
         candidates.append(Path(data_dir))
@@ -511,6 +513,7 @@ def extract_results(m: gp.Model, X: dict, net: Network, cfg: HCConfig) -> dict:
 # =============================================================================
 def resolve_results_dir(out_dir: Optional[str] = None) -> Path:
     """Carpeta de salida: argumento > HC_RESULTS_DIR > <raíz_proyecto>/results."""
+    # OJO: NO usar rutas absolutas (p.ej. r"C:\Users\..."); todo se resuelve relativo a este archivo.
     if out_dir:
         p = Path(out_dir)
     elif os.environ.get("HC_RESULTS_DIR"):

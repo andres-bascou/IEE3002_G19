@@ -4,7 +4,11 @@ import numpy as np
 import pandas as pd
 
 # 1. Definición de rutas base
-BASE_DIR = r"C:\Users\jorge\Desktop\Proyecto_opti"
+# OJO: NO usar rutas absolutas (p.ej. r"C:\Users\..." o "/Users/..."): solo funcionan en un PC.
+# Se resuelve la raíz del proyecto relativa a este archivo (<raíz>/<carpeta>/este_script.py).
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # raíz del proyecto
+DIR_FIG = os.path.join(BASE_DIR, "results", "figures")
+os.makedirs(DIR_FIG, exist_ok=True)
 DIR_PV = os.path.join(BASE_DIR, "data", "pv_profiles")
 DIR_DEM = os.path.join(BASE_DIR, "data", "demand")
 
@@ -184,11 +188,11 @@ ax3_sol.legend(lineas, etiquetas, loc="upper left")
 
 plt.tight_layout()
 plt.savefig(
-    os.path.join(BASE_DIR, "comprobacion_perfiles.png"),
+    os.path.join(DIR_FIG, "comprobacion_perfiles.png"),
     dpi=300,
     bbox_inches="tight",
 )
 plt.show()
 print(
-    f"\nGráfico guardado como 'comprobacion_perfiles.png' en: {BASE_DIR}"
+    f"\nGráfico guardado como 'comprobacion_perfiles.png' en: {DIR_FIG}"
 )

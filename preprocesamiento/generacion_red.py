@@ -12,7 +12,9 @@ import pandapower as pp
 import pandapower.networks as pn
 
 # 1. Rutas del proyecto
-BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in locals() else os.getcwd()
+# OJO: NO usar rutas absolutas (p.ej. r"C:\Users\..." o "/Users/..."): solo funcionan en un PC.
+# Se resuelve la raíz del proyecto relativa a este archivo (<raíz>/<carpeta>/este_script.py).
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # raíz del proyecto
 OUTPUT_DIR = os.path.join(BASE_DIR, "data", "grid")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

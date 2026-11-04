@@ -3,17 +3,20 @@ import numpy as np
 import pandas as pd
 
 # 1. Definición de rutas
-BASE_DIR = r"C:\Users\jorge\Desktop\Proyecto_opti"
+# OJO: NO usar rutas absolutas (p.ej. r"C:\Users\..." o "/Users/..."): solo funcionan en un PC.
+# Se resuelve la raíz del proyecto relativa a este archivo (<raíz>/<carpeta>/este_script.py).
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # raíz del proyecto
+RAW_DIR = os.path.join(BASE_DIR, "data", "raw")
 output_dir = os.path.join(BASE_DIR, "data", "demand")
 os.makedirs(output_dir, exist_ok=True)
 
 files = {
-    "regulados": os.path.join(BASE_DIR, "demanda_regulados_31_07.xlsx"),
+    "regulados": os.path.join(RAW_DIR, "demanda_regulados_31_07.xlsx"),
     "pequenas_empresas": os.path.join(
-        BASE_DIR, "demanda_pequenas_empresas_31_07.xlsx"
+        RAW_DIR, "demanda_pequenas_empresas_31_07.xlsx"
     ),
     "grandes_empresas": os.path.join(
-        BASE_DIR, "demanda_grandes_empresas_31_07.xlsx"
+        RAW_DIR, "demanda_grandes_empresas_31_07.xlsx"
     ),
 }
 

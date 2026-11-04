@@ -5,3 +5,4 @@ env/
 outputs/
 *.log
 *.code-workspace
+.DS_Store
