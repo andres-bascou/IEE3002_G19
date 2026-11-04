@@ -439,7 +439,7 @@ def extract_results(m: gp.Model, X: dict, net: Network, cfg: HCConfig) -> dict:
     pv_sites = pd.DataFrame([{
         "bus": j, "w": round(val(X["w"][j])), "P_cap_MW": val(X["Ppv_cap"][j]) * S,
         "E_gen_MWh": sum(val(X["Ppv"][j, t]) for t in T) * S * cfg.dt} for j in G_pv])
-    pv_sites = pv_sites[pv_sites["w"] == 1].reset_index(drop=True)
+    pv_sites = pv_sites[pv_sites["w"] == 1].reset_index(drop=True) if len(pv_sites) else pv_sites
 
     bess_sites = pd.DataFrame([{
         "bus": j, "z": round(val(X["z"][j])), "P_cap_MW": val(X["Pb_cap"][j]) * S,
