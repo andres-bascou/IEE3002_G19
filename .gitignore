@@ -6,3 +6,7 @@ outputs/
 *.log
 *.code-workspace
 .DS_Store
+
+# Papers citados: no se versionan (cada integrante los descarga; ver docs/papers/README.md)
+docs/papers/*
+!docs/papers/README.md
