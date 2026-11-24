@@ -241,7 +241,11 @@ def modelo_produccion(sin_binarias: bool = True, ajustar_tolerancias: bool = Tru
     demanda = pd.DataFrame({"lambda_regulados": [1.0], "lambda_pequenas": [1.0],
                             "lambda_grandes": [1.0]}, index=[1])
     extra = dict(pv_candidates=[], bess_candidates=[]) if sin_binarias else {}
-    cfg = HCConfig(T=1, n_pv_max=0, n_bess_max=0, time_limit=None, output_flag=0, **extra)
+    # La Etapa 1 valida el SOCP relajado del informe con su objetivo (1), que sin PV ni BESS
+    # se reduce a minimizar pérdidas. Se fija explícitamente porque desde la Etapa 2 los valores
+    # por defecto de HCConfig son el modelo exacto y max sum P^PV.
+    cfg = HCConfig(T=1, n_pv_max=0, n_bess_max=0, time_limit=None, output_flag=0,
+                   exact_cone=False, objective="informe", **extra)
     net = build_network(nodos, ramas, demanda, cfg)
     alpha = pd.Series([0.0], index=[1])        # sin recurso solar (irrelevante con n_pv_max = 0)
     m, X = build_model(net, alpha, cfg)

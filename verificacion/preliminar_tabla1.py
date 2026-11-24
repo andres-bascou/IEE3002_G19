@@ -2,8 +2,9 @@
 verificacion/preliminar_tabla1.py
 =================================
 *** PRELIMINAR ***  Resultados exploratorios para la Etapa 2 (replicar la Tabla 1 de [4]).
-El equipo AÚN NO decide cambiar el modelo del informe al MIQCP exacto ni a la función
-objetivo (10) de [4]; este script solo documenta lo que se observa con cada alternativa.
+Este script motivó las decisiones del equipo (modelo exacto, objetivo max sum P^PV, sin
+vertimiento). La Etapa 2 oficial está en verificacion/etapa2_tabla1.py; este archivo se
+mantiene porque lo usan las figuras de presentacion/ y compara exacto vs relajado.
 
 Referencia [4]: J. Blanco-Solano, D. J. Chacón Molina, D. L. Chaustre Cárdenas,
 "Enhanced optimization-based PV hosting capacity method for improved planning of real
@@ -77,9 +78,12 @@ def _datos():
 def construir(objetivo: str, exacto: bool, candidatos=None):
     """Construye el modelo de la Tabla 1. objetivo: '10' (max sum P^PV) o '1' (informe)."""
     nodes, branches, plana = _datos()
+    # Se fijan los valores previos a la Etapa 2 (relajado, objetivo (1), con vertimiento):
+    # este script cambia el cono y el objetivo por su cuenta.
     cfg = HCConfig(T=1, p_pv_max_mw=P_PV_MAX_MW, n_pv_max=32, n_bess_max=0, bess_candidates=[],
                    pv_candidates=candidatos, p_s_ref_pu=P_S_REF_PU, output_flag=0,
-                   time_limit=300, mip_gap=1e-4)
+                   time_limit=300, mip_gap=1e-4, exact_cone=False, objective="informe",
+                   curtailment_allowed=True)
     net = build_network(nodes, branches, plana, cfg)
     m, X = build_model(net, pd.Series([1.0], index=[1]), cfg)     # alpha = 1 (carga base)
     if exacto:
@@ -158,7 +162,7 @@ def ejecutar() -> dict:
 def main() -> int:
     print("=" * 78)
     print("*** PRELIMINAR *** Tabla 1 de [4] (IEEE 33-bus, carga base, sin BESS)")
-    print("El equipo aún no decide adoptar el MIQCP exacto ni el objetivo (10).")
+    print("La Etapa 2 oficial (modelo exacto, objetivo (10)) está en verificacion/etapa2_tabla1.py.")
     print("=" * 78)
     res = ejecutar()
     for esc in (1, 2):

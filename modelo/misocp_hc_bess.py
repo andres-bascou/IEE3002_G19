@@ -3,8 +3,19 @@ modelo/misocp_hc_bess.py
 ========================
 Hosting Capacity (HC) con PV + BESS en redes de distribución radiales.
 
-MISOCP multiperíodo (T = 24 h) basado en la relajación cónica del Branch Flow
-Model (Jabr / Farivar & Low) sobre la red IEEE 33-bus.
+Modelo multiperíodo (T = 24 h) basado en el Branch Flow Model (Jabr / Farivar & Low)
+sobre la red IEEE 33-bus.
+
+Decisiones del equipo para la Etapa 2 (valores por defecto de HCConfig)
+-----------------------------------------------------------------------
+* Modelo exacto (exact_cone=True): el cono se impone como igualdad P^2 + Q^2 = v*l
+  (ec. (15) de [R2]) => MIQCP no convexo, Gurobi NonConvex = 2. Con exact_cone=False
+  se obtiene el MISOCP relajado del informe (P^2 + Q^2 <= v*l), útil para la pregunta 4.
+* Objetivo (objective="pv"): max sum_t sum_j P^PV_{j,t} dt, como la ec. (10) de [R2].
+  objective="informe" recupera el objetivo (1) del informe (PV - degradación - pérdidas).
+* Sin vertimiento (curtailment_allowed=False): P^PV_{j,t} = alpha_t * P^{PV,cap}_j.
+* Tamaño de BESS sin cambios (2 x 50 kW / 100 kWh).
+* Límites de tensión 0.9-1.1 p.u. [R2, Sec. 4.1] (los mismos del CSV de data/grid).
 
 Decisiones de planificación : w_j, P_j^{PV,cap}, z_j, P_j^{B,cap}, E_j^{B,cap}
 Decisiones de operación     : P^{PV}, P^{ch}, P^{dis}, SoC, mu^{ch}, mu^{dis}
@@ -33,8 +44,9 @@ Fuentes de los parámetros por defecto (ver HCConfig)
      Delivery, vol. 4, no. 2, pp. 1401-1407, Apr. 1989, doi: 10.1109/61.25627.
      Red IEEE 33-bus cargada desde pandapower (pandapower.networks.case33bw,
      equivalente a case33bw de MATPOWER): S_base = 10 MVA, V_base = 12.66 kV.
-[R2] Blanco-Solano et al. (2026), Sec. 4.1: misma red como benchmark y
-     límite térmico de conductores I_max = 300 A.
+[R2] Blanco-Solano et al. (2026), Sec. 4.1: misma red como benchmark,
+     límite térmico de conductores I_max = 300 A, tensiones 0.9-1.1 p.u. e
+     intercambio con la red aguas arriba <= 4.6 MW (Tabla 1, ver config_tabla1).
 [R3] Terralink, "Almacenamiento de energía solar (BESS): guía para empresas",
      https://www.terralink.cl/aprende/almacenamiento-energia-solar-bess-guia-empresas-chile
      -> eficiencias de carga y descarga (eta_ch = eta_dis = 0.95).
@@ -53,7 +65,7 @@ from __future__ import annotations
 import json
 import os
 from collections import defaultdict, deque
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -74,14 +86,19 @@ class HCConfig:
     demand_basis: str = "peak"               # "peak" | "mean" (archivo de perfiles)
     month: object = 7                        # int 1..12 o nombre de columna/mes
     alpha_file: Optional[str] = None         # p.ej. "alpha_t_mes_07.csv" (opcional)
+    flat_profiles: bool = False              # True => lambda_t = alpha_t = 1 (carga base, Tabla 1 [R2])
+
+    # --- Formulación ----------------------------------------------------------
+    exact_cone: bool = True                  # True: P^2+Q^2 = v*l (MIQCP); False: <= (MISOCP relajado)
+    objective: str = "pv"                    # "pv": max sum P^PV [R2, ec. 10]; "informe": objetivo (1)
 
     # --- Red / simulación ---------------------------------------------------
     T: int = 24
     dt: float = 1.0                          # [h]
     s_base_mva: float = 10.0                 # [MVA]  [R1] net.sn_mva de case33bw
     v_base_kv: float = 12.66                 # [kV]   [R1] net.bus.vn_kv de case33bw
-    v_min: float = 0.95                      # usado si el CSV no trae v_min_pu
-    v_max: float = 1.05                      # usado si el CSV no trae v_max_pu
+    v_min: float = 0.90                      # [R2] usado si el CSV no trae v_min_pu
+    v_max: float = 1.10                      # [R2] usado si el CSV no trae v_max_pu
     v_slack: float = 1.0
     # Límite térmico [R2]: 300 A. pandapower trae max_i_ka = 99999 (= "sin límite"),
     # por eso se define aquí y se convierte a p.u. con I_base = S_base/(sqrt(3) V_base).
@@ -96,7 +113,7 @@ class HCConfig:
     p_pv_max_mw: float = 2.0                 # por proyecto [MW]
     n_pv_max: int = 3
     pv_candidates: Optional[Iterable[int]] = None   # None = todas las barras N+
-    curtailment_allowed: bool = True         # False => P_pv = alpha_t * P_cap
+    curtailment_allowed: bool = False        # False => P_pv = alpha_t * P_cap (sin vertimiento)
 
     # --- BESS -----------------------------------------------------------------
     p_b_max_mw: float = 0.050                # [MW]  = Dmax = Cmax = 50 kW   [R6]
@@ -117,6 +134,13 @@ class HCConfig:
     time_limit: Optional[float] = 600
     threads: Optional[int] = None
     output_flag: int = 1
+    # Parámetros extra de Gurobi (p.ej. {"BarQCPConvTol": 1e-10, "BarConvTol": 1e-10} para
+    # comparar SOCP/MISOCP con precisión, ver Etapa 1). Con exact_cone=True se fijan
+    # NonConvex = 2 y FeasibilityTol = 1e-9; lo que venga aquí se aplica después y los reemplaza.
+    gurobi_params: Dict[str, float] = field(default_factory=dict)
+    # Criterio de exactitud: brecha cónica relativa (v*l - P^2 - Q^2)/(v*l) <= tol_gap_rel.
+    # Reemplaza al umbral absoluto 1e-4 p.u.^2 de (28), demasiado holgado en ramas finales.
+    tol_gap_rel: float = 1e-4
 
 
 # =============================================================================
@@ -306,13 +330,23 @@ def build_model(net: Network, alpha: pd.Series, cfg: HCConfig) -> Tuple[gp.Model
     P_b_max = cfg.p_b_max_mw / cfg.s_base_mva
     E_b_max = cfg.e_b_max_mwh / E_base
 
-    m = gp.Model("misocp_hc_bess")
+    if cfg.objective not in ("pv", "informe"):
+        raise ValueError(f"objective debe ser 'pv' o 'informe', no {cfg.objective!r}.")
+
+    m = gp.Model("miqcp_hc_bess" if cfg.exact_cone else "misocp_hc_bess")
     m.Params.OutputFlag = cfg.output_flag
     m.Params.MIPGap = cfg.mip_gap
     if cfg.time_limit:
         m.Params.TimeLimit = cfg.time_limit
     if cfg.threads:
         m.Params.Threads = cfg.threads
+    if cfg.exact_cone:
+        m.Params.NonConvex = 2                             # igualdad cuadrática (no convexa)
+        # Con la tolerancia por defecto (1e-6) la igualdad deja brechas relativas ~1e-3 en
+        # ramas con poco flujo (l ~ 1e-4); con 1e-9 bajan a ~1e-5 (Tabla 1, escenario 2).
+        m.Params.FeasibilityTol = 1e-9
+    for k, val in cfg.gurobi_params.items():
+        m.setParam(k, val)
 
     # ---- Variables de red (límites como bounds => modelo más compacto) --------
     v = m.addVars(N, T, name="v",
@@ -362,15 +396,18 @@ def build_model(net: Network, alpha: pd.Series, cfg: HCConfig) -> Tuple[gp.Model
         m.addConstr(PS[t] == net.PL[s, t] + gp.quicksum(Pf[k, t] for k in ch(s)), name=f"PS[{t}]")
         m.addConstr(QS[t] == net.QL[s, t] + gp.quicksum(Qf[k, t] for k in ch(s)), name=f"QS[{t}]")
 
-    # ---- 3. Caída de tensión + relajación cónica (cono rotado) --------------------------
+    # ---- 3. Caída de tensión + cono: exacto (igualdad) o relajado (cono rotado) -----------
     for t in T:
         for j in Np:
             p = net.parent[j]
             m.addConstr(v[j, t] == v[p, t]
                         - 2.0 * (net.r[j] * Pf[j, t] + net.x[j] * Qf[j, t])
                         + (net.r[j] ** 2 + net.x[j] ** 2) * l[j, t], name=f"Vdrop[{j},{t}]")
-            m.addConstr(Pf[j, t] * Pf[j, t] + Qf[j, t] * Qf[j, t] <= v[p, t] * l[j, t],
-                        name=f"SOC[{j},{t}]")
+            flujo2 = Pf[j, t] * Pf[j, t] + Qf[j, t] * Qf[j, t]
+            if cfg.exact_cone:      # ec. (15) de [R2]: l = |I|^2 exacto, sin pérdidas ficticias
+                m.addConstr(flujo2 == v[p, t] * l[j, t], name=f"BFM_exacto[{j},{t}]")
+            else:                   # relajación cónica del informe (7)
+                m.addConstr(flujo2 <= v[p, t] * l[j, t], name=f"SOC[{j},{t}]")
 
     # ---- 4. Límites de red (tensión/corriente ya están como bounds) -----------------------
     for t in T:
@@ -411,11 +448,17 @@ def build_model(net: Network, alpha: pd.Series, cfg: HCConfig) -> Tuple[gp.Model
         m.addConstr(z.sum() <= cfg.n_bess_max, name="Bbudget")
 
     # ---- Función objetivo ------------------------------------------------------------------------------
-    obj = gp.quicksum(
-        gp.quicksum(Ppv[j, t] for j in G_pv)
-        - gp.quicksum(cfg.c_deg * Pdis[j, t] for j in G_b)
-        - gp.quicksum(net.r[j] * l[j, t] for j in Np)
-        for t in T) * dt
+    if cfg.objective == "pv":
+        # ec. (10) de [R2]: energía PV. Sin vertimiento equivale a max (sum_t alpha_t) * sum_j P^{PV,cap}_j,
+        # es decir, a maximizar el HC. El despacho de los BESS no entra al objetivo (puede no ser único).
+        obj = gp.quicksum(Ppv[j, t] for j in G_pv for t in T) * dt
+    else:
+        # objetivo (1) del informe: maximiza la exportación, no determina el HC (ver README)
+        obj = gp.quicksum(
+            gp.quicksum(Ppv[j, t] for j in G_pv)
+            - gp.quicksum(cfg.c_deg * Pdis[j, t] for j in G_b)
+            - gp.quicksum(net.r[j] * l[j, t] for j in Np)
+            for t in T) * dt
     m.setObjective(obj, GRB.MAXIMIZE)
 
     vars_ = dict(v=v, l=l, Pf=Pf, Qf=Qf, PS=PS, QS=QS, w=w, Ppv_cap=Ppv_cap, Ppv=Ppv,
@@ -462,11 +505,19 @@ def extract_results(m: gp.Model, X: dict, net: Network, cfg: HCConfig) -> dict:
     pv_ops = pd.DataFrame([{"bus": j, "t": t, "P_pv_MW": val(X["Ppv"][j, t]) * S}
                            for j in pv_sites["bus"] for t in T]) if len(pv_sites) else pd.DataFrame()
 
-    # Brecha cónica: max | v_pi * l - (P^2 + Q^2) |
-    gaps = {(j, t): abs(val(X["v"][net.parent[j], t]) * val(X["l"][j, t])
-                        - (val(X["Pf"][j, t]) ** 2 + val(X["Qf"][j, t]) ** 2))
-            for j in Np for t in T}
+    # Brecha cónica absoluta |v_pi * l - (P^2 + Q^2)| [p.u.^2] (criterio (28) del informe) y
+    # relativa |.| / (v_pi * l), que es la que decide la exactitud (ver Etapa 1).
+    gaps, gaps_rel, fict = {}, {}, 0.0
+    for j in Np:
+        for t in T:
+            vl = val(X["v"][net.parent[j], t]) * val(X["l"][j, t])
+            f2 = val(X["Pf"][j, t]) ** 2 + val(X["Qf"][j, t]) ** 2
+            gaps[j, t] = abs(vl - f2)
+            gaps_rel[j, t] = abs(vl - f2) / vl if vl > 1e-12 else 0.0
+            # pérdidas ficticias: r * (l - (P^2+Q^2)/v_pi), corriente que no existe físicamente
+            fict += net.r[j] * (val(X["l"][j, t]) - f2 / val(X["v"][net.parent[j], t]))
     gap = max(gaps.values())
+    gap_rel = max(gaps_rel.values())
 
     losses_MWh = sum(net.r[j] * val(X["l"][j, t]) for j in Np for t in T) * S * cfg.dt
     summary = {
@@ -475,8 +526,10 @@ def extract_results(m: gp.Model, X: dict, net: Network, cfg: HCConfig) -> dict:
         "hosting_capacity_PV_MW": float(pv_sites["P_cap_MW"].sum()) if len(pv_sites) else 0.0,
         "BESS_P_MW": float(bess_sites["P_cap_MW"].sum()) if len(bess_sites) else 0.0,
         "BESS_E_MWh": float(bess_sites["E_cap_MWh"].sum()) if len(bess_sites) else 0.0,
-        "losses_MWh": losses_MWh, "conic_gap_pu2": gap,
-        "conic_exact": gap <= 1e-4, "runtime_s": m.Runtime,
+        "losses_MWh": losses_MWh, "fictitious_losses_MWh": fict * S * cfg.dt,
+        "conic_gap_pu2": gap, "conic_gap_rel": gap_rel,
+        "conic_exact": gap_rel <= cfg.tol_gap_rel, "runtime_s": m.Runtime,
+        "exact_cone": cfg.exact_cone, "objective": cfg.objective,
     }
     # Flujos por rama (para graficar cargabilidad)
     i_base_ka = cfg.s_base_mva / (np.sqrt(3.0) * cfg.v_base_kv)
@@ -600,7 +653,8 @@ def save_results(res: dict, cfg: HCConfig, out_dir: Optional[str] = None,
     payload = {
         "meta": {"created": datetime.now().isoformat(timespec="seconds"),
                  "gurobi_version": ".".join(map(str, gp.gurobi.version())),
-                 "model": "misocp_hc_bess"},
+                 "model": "misocp_hc_bess",
+                 "formulation": "MIQCP exacto" if cfg.exact_cone else "MISOCP relajado"},
         "config": asdict(cfg),
         "topology": build_topology(net, cfg),
         "summary": res["summary"],
@@ -656,21 +710,55 @@ def load_results(path: str) -> dict:
     return out
 
 
-def run_hc_bess(cfg: Optional[HCConfig] = None, save: bool = True,
-                out_dir: Optional[str] = None, save_csv: bool = False) -> dict:
-    cfg = cfg or HCConfig()
+def config_tabla1(escenario: int, **kw) -> HCConfig:
+    """
+    Configuración de la Tabla 1 de [R2] (Sec. 4.1), Etapa 2 del proyecto:
+    carga base (T = 1, lambda = alpha = 1), PV con fp unitario, sin BESS, tensiones 0.9-1.1 p.u.,
+    I_max = 300 A, exportación hacia la red aguas arriba <= 4.6 MW (P_S >= -0.46 p.u.),
+    modelo exacto y objetivo max sum P^PV.
+        Escenario 1: todas las barras candidatas a PV.   Escenario 2: solo las barras 2 y 3.
+    [R2] no fija un tope por proyecto ni por número de proyectos: se usan 20 MW por barra y
+    n_pv_max = 32 (todas), que no quedan activos. kw sobrescribe cualquier campo.
+    """
+    if escenario not in (1, 2):
+        raise ValueError("La Tabla 1 de [R2] tiene los escenarios 1 y 2.")
+    base = dict(T=1, flat_profiles=True, exact_cone=True, objective="pv",
+                curtailment_allowed=False, p_pv_max_mw=20.0, n_pv_max=32,
+                pv_candidates=None if escenario == 1 else [2, 3],
+                n_bess_max=0, bess_candidates=[], p_s_ref_pu=-0.46,
+                mip_gap=1e-4, time_limit=300, output_flag=0)
+    base.update(kw)
+    return HCConfig(**base)
+
+
+def load_inputs(cfg: HCConfig) -> Tuple[Network, pd.Series]:
+    """Lee data/ y arma la red y el perfil alpha_t (planos si cfg.flat_profiles)."""
     data_dir = resolve_data_dir(cfg.data_dir)
     nodes, branches = load_grid(data_dir)
-    demand = load_demand_profiles(data_dir, cfg.demand_basis, cfg.T)
-    alpha = load_pv_profile(data_dir, cfg.T, cfg.month, cfg.alpha_file)
-    net = build_network(nodes, branches, demand, cfg)
+    idx = range(1, cfg.T + 1)
+    if cfg.flat_profiles:
+        demand = pd.DataFrame({c: 1.0 for c in ("lambda_regulados", "lambda_pequenas",
+                                                "lambda_grandes")}, index=idx)
+        alpha = pd.Series(1.0, index=idx, name="alpha")
+    else:
+        demand = load_demand_profiles(data_dir, cfg.demand_basis, cfg.T)
+        alpha = load_pv_profile(data_dir, cfg.T, cfg.month, cfg.alpha_file)
+    return build_network(nodes, branches, demand, cfg), alpha
+
+
+def run_hc_bess(cfg: Optional[HCConfig] = None, save: bool = True,
+                out_dir: Optional[str] = None, save_csv: bool = False,
+                filename: Optional[str] = None) -> dict:
+    cfg = cfg or HCConfig()
+    net, alpha = load_inputs(cfg)
 
     model, X = build_model(net, alpha, cfg)
     model.optimize()
     res = extract_results(model, X, net, cfg)
-    res.update(model=model, network=net, config=cfg)
+    res.update(model=model, network=net, config=cfg, vars=X)
     if save:
-        res["results_path"] = save_results(res, cfg, out_dir=out_dir, save_csv=save_csv)
+        res["results_path"] = save_results(res, cfg, out_dir=out_dir, save_csv=save_csv,
+                                           filename=filename)
     return res
 
 
