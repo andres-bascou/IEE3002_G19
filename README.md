@@ -37,6 +37,7 @@ El objetivo es maximizar la capacidad de alojamiento (*Hosting Capacity*, HC) de
 ├── verificacion/                Validaciones: red, perfiles, Etapa 1 (etapa1_caso_base.py),
 │                                Etapa 2 (etapa2_tabla1.py) y exacto vs relajado (preliminar_tabla1.py)
 ├── modelo/                      misocp_hc_bess.py (modelo en Gurobi) y grafico_resultados.py
+├── experimentos/                Experimentos de las preguntas de investigación (pregunta 2)
 ├── presentacion/                graficos_avance.py: figuras de los avances para presentar
 ├── exploratorio/                Primera exploración de la instancia (ya no se usa)
 └── results/                     JSON de cada corrida y figures/ (figuras y dashboards)
@@ -70,6 +71,7 @@ python3.10 -m venv .venv
 | Validar red y perfiles | `.venv/bin/python verificacion/comprobacion_red.py` (y los demás `comprobacion*.py`) | Gráficos en `results/figures/` |
 | **Etapa 1** | `.venv/bin/python verificacion/etapa1_caso_base.py` | Tablas por barra y rama, y PASS/FAIL |
 | **Etapa 2** (Tabla 1 de [4]) | `.venv/bin/python verificacion/etapa2_tabla1.py [--escenario 1\|2]` | HC vs [4], validación AC y PASS/FAIL; `results/etapa2_tabla1*.json` |
+| Pregunta 2: concentrado vs distribuido | `.venv/bin/python experimentos/pregunta2_concentrado_distribuido.py` (~3 min) | `results/pregunta2_concentrado_distribuido.json` y `results/figures/pregunta2/` |
 | Tabla 1 de [4] (PRELIMINAR) | `.venv/bin/python verificacion/preliminar_tabla1.py` | HC exacto vs relajado; `results/preliminar_tabla1.json` |
 | Modelo completo (PV + BESS, 24 h) | `.venv/bin/python modelo/misocp_hc_bess.py` | `results/hc_bess_results_m<mes>_<fecha>.json` |
 | Dashboard de una corrida | `.venv/bin/python modelo/grafico_resultados.py [results/<archivo>.json]` | HTML interactivos en `results/figures/` |
@@ -152,6 +154,22 @@ Reproduce el flujo de potencia AC de pandapower con el modelo de optimización, 
 - En ambos escenarios, el modelo y el flujo AC coinciden a ~1e-10 p.u., y la brecha relativa es ≤ 1e-5. El MIP gap es ≤ 1e-6, así que es el óptimo global.
 - [4] reporta para el escenario 1 una exportación de 4600 kW, I_max = 259 A y V_max = 1.0934 p.u. Aquí la exportación y la corriente coinciden, pero V_max llega a 1.10 p.u. Queda por revisar en el PDF de [4] si su V_max se mide en otro punto o con otra ubicación del PV (ellos asignan 12 kW a la barra 9).
 
+### Pregunta 2: PV concentrado vs distribuido 🟡 (carga base; falta 24 h)
+
+`experimentos/pregunta2_concentrado_distribuido.py` parte de la Tabla 1 de [4] (escenario 1: carga base, sin BESS, modelo exacto). Cambia cuánto se puede concentrar el PV de tres formas: limitando el número de barras con PV, poniendo un tope de capacidad por barra, o repartiéndolo igual en las 32 barras. Todo se corre con y sin el límite de exportación de 4.6 MW. Son 30 casos: 22 se resuelven al óptimo y 8 se certifican sin resolver (ver el último punto). Todas las soluciones respetan los límites en el flujo AC de pandapower.
+
+| Caso | Con límite de exportación | Sin límite de exportación |
+|---|---|---|
+| PV en 1 sola barra | 8892 kW, barra 6 (−4.0 %) | 10 037 kW, barra 2 (−4.7 %) |
+| **Óptimo** (sin restringir sitios) | **9266 kW**: 2 barras (22, 18) | **10 536 kW**: 3 barras (25, 18, 2) |
+| Tope de 0.5–4 MW por barra (7 a 19 barras) | 9000–9194 kW (−2.9 a −0.8 %) | 10 387–10 496 kW (−1.4 a −0.4 %) |
+| PV uniforme en las 32 barras | 8657 kW (−6.6 %) | 9577 kW (−9.1 %) |
+
+- **El HC máximo se alcanza concentrando el PV en 2 o 3 barras.** Permitir más barras no lo aumenta, y obligar a repartirlo lo reduce entre 0.4 y 9 %. Con un tope de 0.25 MW por barra el HC queda en 8000 kW (32 × 0.25 MW): lo limita el tope, no la red.
+- **Con el límite de exportación, el HC premia las pérdidas.** Sumando los balances, HC = exportación + carga + pérdidas = 4600 + 3715 + pérdidas [kW]. Por eso al optimizador le conviene poner el PV al final de los ramales (barras 18 y 22), donde las pérdidas son mayores (951 kW). El PV uniforme pierde solo 342 kW y por eso su HC es menor. Este efecto es consecuencia de cómo se define el HC con un límite de intercambio y conviene discutirlo en el informe.
+- **Sin el límite de exportación**, lo que limita son la tensión máxima y la corriente, y el óptimo cambia de barras (25, 18 y 2).
+- **Optimalidad con pocos sitios:** con 6 a 12 sitios Gurobi no cierra el gap en 2 min. Pero el HC no puede bajar al permitir más sitios, y ya con 2 sitios (3 sin límite de exportación) se alcanza el HC sin restricción de sitios. Por lo tanto esos casos tienen ese mismo HC óptimo, y el script lo certifica así, sin resolverlos.
+
 ### Hallazgos de la revisión del modelo (motivaron las decisiones de la Etapa 2)
 
 Se revisó la formulación contra [4], [6] y [7], y se probó numéricamente. Las ecuaciones de red (2)–(12) son correctas. Los problemas aparecen cuando se agrega PV:
@@ -226,8 +244,12 @@ Se generan con `.venv/bin/python presentacion/graficos_avance.py` (~7 s) en `res
 - [ ] Corregir comentarios desactualizados (numeración de restricciones, I_base).
 
 **Etapa 3 y análisis**
-- [ ] Modelo multiperíodo (24 h) con BESS, y comparar el HC con y sin baterías (pregunta 1). Ojo: con el cono exacto, el modelo de 24 h tiene 792 igualdades cuadráticas no convexas y 1600 binarias, así que puede tardar bastante más que el MISOCP. Conviene medir el tiempo temprano.
-- [ ] Generación concentrada vs distribuida (pregunta 2).
+- [ ] Modelo multiperíodo (24 h) con BESS, y comparar el HC con y sin baterías (pregunta 1).
+  - **Pruebas de tiempo** (julio, exportación ≤ 4.6 MW, sin topes de PV activos): sin BESS llega al óptimo en ~2 min (HC 12.6 MW, barras 18 y 22). Con BESS (1568 binarias más) no cierra el gap en 10 min: queda entre 4.5 y 7 %.
+  - **Qué se probó:** partir desde la solución sin BESS, `MIPFocus=3`, BESS solo en las barras 18 y 22, y cotas explícitas en los flujos. Lo único que ayudó fue reducir las barras candidatas a BESS (gap 4.5 %). La mejor solución da 12 752 kW: +0.9 % con 2 × 50 kW.
+  - **Ideas pendientes:** fijar la ubicación del PV y optimizar solo los tamaños, o revisar si se pueden quitar las binarias de carga y descarga (1536 de las 1568).
+- [x] Generación concentrada vs distribuida (pregunta 2), en carga base: ver resultados arriba.
+- [ ] Pregunta 2 en el modelo de 24 h (sin BESS, ~2 min por corrida).
 - [ ] Análisis de sensibilidad de los parámetros (pregunta 3): eficiencias, DoD, τ, c_deg, tamaño de BESS, límites de exportación.
 - [ ] Cuantificar el error de la relajación frente al MIQCP (pregunta 4); los resultados preliminares de arriba ya lo adelantan.
 - [ ] Gráficos de despacho, perfiles de tensión y ciclado de baterías.

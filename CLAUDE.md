@@ -26,6 +26,7 @@ Use the project venv, `.venv/bin/python` (Python 3.10). Every script resolves it
 .venv/bin/python verificacion/etapa1_caso_base.py      # Etapa 1: SOCP vs pandapower, exits 0 on PASS
 .venv/bin/python verificacion/etapa2_tabla1.py [--escenario 1|2]  # Etapa 2: [4] Table 1, exact MIQCP + AC check, exits 0 on PASS
 .venv/bin/python verificacion/preliminar_tabla1.py     # PRELIMINAR: [4] Table 1, exact MIQCP vs relaxed MISOCP
+.venv/bin/python experimentos/pregunta2_concentrado_distribuido.py  # research question 2 on [4] Table 1 (~3 min) -> results/ + figure
 .venv/bin/python presentacion/graficos_avance.py       # progress figures -> results/figures/avance/
 ```
 
@@ -51,6 +52,8 @@ Environment notes: `.venv` has everything in `requirements.txt` (gurobipy 10.0.3
 
   The relaxed MISOCP (`exact_cone=False`) is kept for research question 4. Still open: whether the 4.6 MW export limit applies to the 24 h model (`p_s_ref_pu` defaults to `None`).
 - **Etapa 2:** `config_tabla1(escenario)` sets up [4] Table 1, and `verificacion/etapa2_tabla1.py` solves it and validates it with pandapower. Etapa 2 is done. Scenario 1 gives 9266 kW against 9262 (buses 18 and 22, as in [4]), and scenario 2 gives 8554 against 8546. Both PASS and solve in about 2 s.
+- **Research question 2 (carga base) is done:** `experimentos/pregunta2_concentrado_distribuido.py`. The maximum HC uses 2–3 buses. Spreading PV uniformly costs 7–9 %. With the export limit binding, HC = export + load + losses, so the optimum puts PV at feeder ends, where losses are highest. Cases with 6–12 sites are certified by monotonicity, because branch-and-bound doesn't close the gap there. The 24 h version is still pending.
+- **24 h with BESS doesn't close the gap** in 10 min (4.5–7 %). Of warm start, `MIPFocus=3`, BESS candidates limited to {18, 22} and explicit flow bounds, only limiting the candidates helped. README §7 lists the open ideas.
 - **Findings that motivated those decisions:**
   - **The relaxation is not exact once PV pushes a limit to bind.** The model inflates `l` (fictitious losses) to dump PV. On [4] Table 1 the relaxed MISOCP gives 11 818 / 11 663 kW, while the exact MIQCP (cone as equality, Gurobi `NonConvex=2`) gives 9266 / 8554 kW against [4]'s 9262 / 8546. The informe's exactness argument in Sec. II.G is wrong.
   - **Objective (1) doesn't measure HC.** Summing the nodal balances gives ΣP^PV − losses = ΣP^L − P_S, so it maximizes export, and with the export limit binding any HC from 8387 to 11 806 kW is optimal. [4] maximizes ΣP^PV (its eq. 10).
@@ -82,4 +85,4 @@ Environment notes: `.venv` has everything in `requirements.txt` (gurobipy 10.0.3
 - Customer types per bus are set in `generacion_red.py` (19–22 `pequenas`, 24/25/30/31/32 `grandes`, the rest `regulados`) and map to the `lambda_*` demand columns.
 - Profiles have 24 rows with `periodo_t` = 1..24 and `hora` = 0..23. PV `alpha_t` is in [0, 1] (Calama, 1 kW nominal). Demand is the CEN 31-Jul-2026 data, normalized by peak (default) or by mean.
 
-`exploratorio/` holds the early exploratory script and its CSVs. The model does not use them.
+`exploratorio/` holds the early exploratory script and its CSVs. The model does not use them. `experimentos/` holds the research-question experiments. They use the production model as is, with `HCConfig`/`config_tabla1` overrides, and reuse `verificacion/etapa2_tabla1.flujo_ac` for the AC check.
