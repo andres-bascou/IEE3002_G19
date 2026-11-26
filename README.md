@@ -15,9 +15,9 @@ El objetivo es maximizar la capacidad de alojamiento (*Hosting Capacity*, HC) de
 | Etapa (informe, Sec. III) | Estado |
 |---|---|
 | Datos: red, perfiles de demanda y PV | ✅ Listos en `data/` |
-| Modelo MISOCP completo (PV + BESS, 24 h) | ✅ Implementado en `modelo/misocp_hc_bess.py` (ver hallazgos abajo) |
+| Modelo completo (PV + BESS, 24 h) | ✅ Implementado en `modelo/misocp_hc_bess.py`; desde la Etapa 2 es un MIQCP exacto (ver decisiones abajo) |
 | **Etapa 1:** replicar el flujo AC del caso base con el modelo | ✅ **Completada:** coincide con pandapower a ~1e-11 p.u. |
-| **Etapa 2:** replicar la Tabla 1 de [4] (solo PV) | 🟡 Resultados preliminares; requiere decisiones del equipo |
+| **Etapa 2:** replicar la Tabla 1 de [4] (solo PV) | ✅ **Completada** con el modelo exacto: 9266 vs 9262 kW y 8554 vs 8546 kW, validados con pandapower |
 | **Etapa 3:** modelo multiperíodo con BESS y comparación | ⬜ Pendiente |
 
 ---
@@ -34,8 +34,8 @@ El objetivo es maximizar la capacidad de alojamiento (*Hosting Capacity*, HC) de
 │   ├── demand/                  Perfiles de demanda normalizados (pico / media) y en MW
 │   └── pv_profiles/             Perfil solar alpha_t por mes y matriz anual
 ├── preprocesamiento/            Scripts que generan data/ a partir de data/raw/
-├── verificacion/                Validaciones: red, perfiles, Etapa 1 (etapa1_caso_base.py)
-│                                y Tabla 1 de [4], preliminar (preliminar_tabla1.py)
+├── verificacion/                Validaciones: red, perfiles, Etapa 1 (etapa1_caso_base.py),
+│                                Etapa 2 (etapa2_tabla1.py) y exacto vs relajado (preliminar_tabla1.py)
 ├── modelo/                      misocp_hc_bess.py (modelo en Gurobi) y grafico_resultados.py
 ├── presentacion/                graficos_avance.py: figuras de los avances para presentar
 ├── exploratorio/                Primera exploración de la instancia (ya no se usa)
@@ -57,7 +57,9 @@ python3.10 -m venv .venv
 .venv/bin/python verificacion/etapa1_caso_base.py
 ```
 
-- **Gurobi:** se necesita la licencia académica gratuita ([gurobi.com/academia](https://www.gurobi.com/academia/academic-program-and-licenses/), activándola con `grbgetkey` desde la red UC). Sin ella, el `gurobipy` de pip trae una licencia limitada a 2000 variables: alcanza para la Etapa 1, pero no para el modelo de 24 h.
+- **Gurobi:** se necesita la licencia académica gratuita ([gurobi.com/academia](https://www.gurobi.com/academia/academic-program-and-licenses/), activándola con `grbgetkey` desde la red UC). La licencia académica dura un año: si Gurobi dice `License expired`, hay que pedir una nueva en [portal.gurobi.com](https://portal.gurobi.com) (*Licenses → Request → Named-User Academic*).
+- **No clonar el repositorio en una carpeta sincronizada con iCloud** (Documentos o Escritorio en macOS) ni con OneDrive o Dropbox. Si el sistema saca archivos del disco para ahorrar espacio, Python y git se traban al leerlos. Usar, por ejemplo, `~/GitHub/`.
+  - La licencia limitada que trae el `gurobipy` de pip **no sirve como respaldo**: la de la versión 10.0.3 venció el 2024-10-28, y aun en versiones nuevas acepta solo 200 variables cuando hay restricciones cuadráticas. Alcanza para la Etapa 1 (a) y el escenario 2 de la Etapa 2, pero no para la Etapa 1 (b), el escenario 1 ni el modelo de 24 h.
 - **Rutas:** todas se resuelven relativas a cada script, así que los comandos funcionan desde cualquier carpeta. **No usar rutas absolutas** (p.ej. `C:\Users\...`): solo funcionan en un PC.
 
 ## 3. Cómo ejecutar
@@ -67,6 +69,7 @@ python3.10 -m venv .venv
 | Regenerar los datos | `.venv/bin/python preprocesamiento/generacion_red.py` (y `generacion_perfil_carga.py`, `generacion_perfil_pv.py`) | `data/grid`, `data/demand`, `data/pv_profiles` |
 | Validar red y perfiles | `.venv/bin/python verificacion/comprobacion_red.py` (y los demás `comprobacion*.py`) | Gráficos en `results/figures/` |
 | **Etapa 1** | `.venv/bin/python verificacion/etapa1_caso_base.py` | Tablas por barra y rama, y PASS/FAIL |
+| **Etapa 2** (Tabla 1 de [4]) | `.venv/bin/python verificacion/etapa2_tabla1.py [--escenario 1\|2]` | HC vs [4], validación AC y PASS/FAIL; `results/etapa2_tabla1*.json` |
 | Tabla 1 de [4] (PRELIMINAR) | `.venv/bin/python verificacion/preliminar_tabla1.py` | HC exacto vs relajado; `results/preliminar_tabla1.json` |
 | Modelo completo (PV + BESS, 24 h) | `.venv/bin/python modelo/misocp_hc_bess.py` | `results/hc_bess_results_m<mes>_<fecha>.json` |
 | Dashboard de una corrida | `.venv/bin/python modelo/grafico_resultados.py [results/<archivo>.json]` | HTML interactivos en `results/figures/` |
@@ -98,11 +101,15 @@ Todos los parámetros (límites, tamaños de PV/BESS, eficiencias, tolerancias) 
   - Por defecto se usa julio, el mismo mes de la demanda.
 
 ### Modelo (`modelo/misocp_hc_bess.py`)
-Implementa la formulación del informe:
+Implementa la formulación del informe, con las decisiones del equipo para la Etapa 2 como valores por defecto de `HCConfig`:
 - **Decisiones de planificación:** ubicación y tamaño de PV (binaria w_j) y de BESS (binaria z_j).
 - **Operación horaria:** despacho PV, carga/descarga y SoC.
-- **Red:** *Branch Flow Model* con la relajación cónica (7).
-- **Objetivo (1):** energía PV inyectada, menos la degradación del BESS y las pérdidas.
+- **Red:** *Branch Flow Model* **exacto** (`exact_cone=True`): P² + Q² = v·l como igualdad (ec. (15) de [4]), un MIQCP no convexo que Gurobi resuelve con `NonConvex=2` y `FeasibilityTol=1e-9`. Con `exact_cone=False` se obtiene la relajación cónica (7) del informe, para la pregunta 4.
+- **Objetivo** (`objective="pv"`): max ΣP_PV, como la ec. (10) de [4]. Sin vertimiento equivale a maximizar el HC. `objective="informe"` recupera el objetivo (1).
+- **Sin vertimiento** (`curtailment_allowed=False`): P_PV = α_t · P_cap.
+- **Límites de tensión:** 0.9–1.1 p.u.
+- **Exactitud:** `summary["conic_exact"]` usa la brecha relativa (`tol_gap_rel = 1e-4`). Las tolerancias de Gurobi se pasan con `gurobi_params`.
+- **Tabla 1 de [4]:** `config_tabla1(escenario)` arma la configuración (T = 1, perfiles planos, sin BESS, P_S ≥ −4.6 MW).
 - **Resultados:** se guardan en JSON y se grafican con `grafico_resultados.py`, sin necesidad de Gurobi.
 
 ### Etapa 1 (`verificacion/etapa1_caso_base.py`)
@@ -132,7 +139,20 @@ Reproduce el flujo de potencia AC de pandapower con el modelo de optimización, 
 - La relajación cónica es exacta en el caso base: la brecha relativa es 8e-7.
 - **Lección para las etapas siguientes:** con las tolerancias por defecto de Gurobi, las corrientes de las ramas finales quedan hasta 1.5 % por encima del valor real. Aun así, el criterio de brecha absoluta (28) del informe (≤ 1e-4 p.u.²) las da por "exactas", porque en esas ramas P² + Q² es del orden de 5e-5. Por eso la verificación usa la **brecha relativa**, (v·l − P² − Q²)/(v·l).
 
-### Hallazgos de la revisión del modelo (afectan a las Etapas 2 y 3) 🟡 PRELIMINAR
+### Etapa 2: Tabla 1 de [4] con el modelo exacto ✅
+
+`verificacion/etapa2_tabla1.py` resuelve cada escenario con el modelo de producción (`config_tabla1`) y valida la solución con un flujo AC de pandapower. Ambos escenarios toman ~2 s.
+
+| Escenario | [4] | Modelo exacto | Error | Validación AC | Resultado |
+|---|---|---|---|---|---|
+| 1: todas las barras | 9262 kW (barras 18: 2959, 22: 6291, 9: 12) | **9266 kW** (barras 18: 2991, 22: 6275) | +0.04 % | exporta 4600.0 kW, V 0.957–1.100 p.u., I_max 259 A | ✅ PASS |
+| 2: barras 2 y 3 | 8546 kW | **8554 kW** (barra 3) | +0.09 % | exporta 4600.0 kW, V 0.947–1.014 p.u., I_max 252 A | ✅ PASS |
+
+- En el escenario 1 el HC queda limitado a la vez por la exportación (4.6 MW) y por la tensión máxima (1.10 p.u.). En el escenario 2 lo limita solo la exportación.
+- En ambos escenarios, el modelo y el flujo AC coinciden a ~1e-10 p.u., y la brecha relativa es ≤ 1e-5. El MIP gap es ≤ 1e-6, así que es el óptimo global.
+- [4] reporta para el escenario 1 una exportación de 4600 kW, I_max = 259 A y V_max = 1.0934 p.u. Aquí la exportación y la corriente coinciden, pero V_max llega a 1.10 p.u. Queda por revisar en el PDF de [4] si su V_max se mide en otro punto o con otra ubicación del PV (ellos asignan 12 kW a la barra 9).
+
+### Hallazgos de la revisión del modelo (motivaron las decisiones de la Etapa 2)
 
 Se revisó la formulación contra [4], [6] y [7], y se probó numéricamente. Las ecuaciones de red (2)–(12) son correctas. Los problemas aparecen cuando se agrega PV:
 
@@ -186,30 +206,34 @@ Se generan con `.venv/bin/python presentacion/graficos_avance.py` (~7 s) en `res
 
 ## 7. Trabajo remanente
 
-**Decisiones que debe tomar el equipo** (antes de la Etapa 2):
-- [ ] **Modelo para los resultados de HC:** ¿MIQCP exacto (`NonConvex=2`), dejando el MISOCP relajado para responder la pregunta 4? Esto cambia lo que dice el informe.
-- [ ] **Objetivo:** ¿maximizar ΣP_PV, como [4], en vez de (1)?
-- [ ] **Vertimiento:** ¿se define el HC con o sin vertimiento?
-- [ ] **BESS:** ¿se mantiene la escala actual (kW) o se dimensiona en MW, o se hace un barrido de tamaños?
-- [ ] **Límites de tensión oficiales:** 0.9–1.1 p.u., como [4] y los CSV (los valores por defecto de `HCConfig` son 0.95/1.05).
+**Decisiones del equipo** (tomadas para la Etapa 2, ya aplicadas en `HCConfig`):
+- [x] **Modelo para los resultados de HC:** MIQCP exacto (`NonConvex=2`). El MISOCP relajado queda para responder la pregunta 4. Esto cambia lo que dice el informe.
+- [x] **Objetivo:** maximizar ΣP_PV, como [4], en vez de (1).
+- [x] **Vertimiento:** el HC se define sin vertimiento.
+- [x] **BESS:** se mantiene la escala actual (2 × 50 kW / 100 kWh).
+- [x] **Límites de tensión oficiales:** 0.9–1.1 p.u., como [4] y los CSV.
+- [ ] **Pendiente:** ¿el límite de exportación de 4.6 MW se usa también en el modelo de 24 h? Por ahora solo lo impone `config_tabla1` (`p_s_ref_pu` sigue en `None` por defecto).
 
 **Etapa 2: replicar la Tabla 1 de [4]**
-- [ ] Agregar al modelo una configuración "Tabla 1": T = 1, perfiles planos (α = λ = 1), sin BESS, p_pv_max ≥ 10 MW, P_S ≥ −4.6 MW, objetivo ΣP_PV y cono exacto.
-- [ ] Reproducir los escenarios 1 (todas las barras candidatas) y 2 (solo barras 2 y 3), y validar con pandapower.
+- [x] Agregar al modelo una configuración "Tabla 1": `config_tabla1(escenario)`.
+- [x] Escenario 2 (solo barras 2 y 3), validado con pandapower: 8554 kW, PASS.
+- [x] Escenario 1 (todas las barras), validado con pandapower: 9266 kW, PASS.
+- [ ] Actualizar las figuras 08–11 de `presentacion/` (todavía dicen PRELIMINAR) con los resultados de la Etapa 2.
 
 **Ajustes al código**
-- [ ] Exponer las tolerancias de Gurobi en `HCConfig` y usar la brecha relativa en `summary["conic_exact"]`.
-- [ ] Cambiar los valores por defecto de `HCConfig` a 0.90/1.10 p.u.
+- [x] Exponer las tolerancias de Gurobi en `HCConfig` (`gurobi_params`) y usar la brecha relativa en `summary["conic_exact"]`.
+- [x] Cambiar los valores por defecto de `HCConfig` a 0.90/1.10 p.u.
 - [ ] Corregir comentarios desactualizados (numeración de restricciones, I_base).
 
 **Etapa 3 y análisis**
-- [ ] Modelo multiperíodo (24 h) con BESS, y comparar el HC con y sin baterías (pregunta 1).
+- [ ] Modelo multiperíodo (24 h) con BESS, y comparar el HC con y sin baterías (pregunta 1). Ojo: con el cono exacto, el modelo de 24 h tiene 792 igualdades cuadráticas no convexas y 1600 binarias, así que puede tardar bastante más que el MISOCP. Conviene medir el tiempo temprano.
 - [ ] Generación concentrada vs distribuida (pregunta 2).
 - [ ] Análisis de sensibilidad de los parámetros (pregunta 3): eficiencias, DoD, τ, c_deg, tamaño de BESS, límites de exportación.
 - [ ] Cuantificar el error de la relajación frente al MIQCP (pregunta 4); los resultados preliminares de arriba ya lo adelantan.
 - [ ] Gráficos de despacho, perfiles de tensión y ciclado de baterías.
 
 **Informe**
+- [ ] Reflejar las decisiones de la Etapa 2: modelo exacto (MIQCP), objetivo ΣP_PV, sin vertimiento y V 0.9–1.1 p.u.
 - [ ] Corregir el argumento de exactitud de la Sec. II.G: la relajación no es exacta solo porque las cargas sean constantes.
 - [ ] Cambiar el umbral de (28) a una brecha relativa.
 - [ ] Notación: l = |I|² (no |l|²), Q_PV ∈ ℝ vs (16), y el texto de la restricción 15 ("= 1" vs ≤ z_j).
