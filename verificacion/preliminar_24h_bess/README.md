@@ -12,6 +12,7 @@ Cada script agrega una línea a `results/preliminar_24h_bess/<script>.jsonl`. Lo
 .venv/bin/python verificacion/preliminar_24h_bess/sin_mu.py                     # 20 min
 .venv/bin/python verificacion/preliminar_24h_bess/una_binaria.py                # 20 min
 .venv/bin/python verificacion/preliminar_24h_bess/fijar_sitios.py 32,33 21,22   # hasta 10 min por par
+.venv/bin/python verificacion/preliminar_24h_bess/ventana.py 1 13-15             # 5 min por ventana
 ```
 
 ## 0. `medir_24h.py`: cuánto tarda el modelo de 24 h
@@ -61,6 +62,11 @@ Ninguna variante sirvió.
 - Cada solución es factible para el problema completo, así que es una **cota inferior**.
 - Ninguna carga y descarga a la vez.
 
+## 5. `ventana.py`: cota superior con energía, en una ventana de horas
+
+- Solo se modelan las horas de la ventana, con el estado de carga inicial libre y sin estado final. Es una relajación válida que, a diferencia de la cota horaria, sí considera la energía de la BESS.
+- Con las binarias μ el solver no cierra en 5–20 min. La cota quedó peor que la horaria: por ejemplo, 18 056 kW con 1 MW y la ventana 13–15, frente a 16 136 kW de la horaria. Se descartó.
+
 ## Conclusión
 
-Junto con la cota superior de la prueba 2, el HC con BESS queda acotado en **[12 818, 12 866] kW**. `experimentos/pregunta1_bess_cotas.py` formaliza ese método: calcula los sitios de PV, acepta varios tamaños de BESS y verifica con un flujo AC.
+Junto con la cota superior de la prueba 2, el HC con 2 × 50 kW queda acotado en **[12 818, 12 866] kW**. `experimentos/pregunta1_bess_cotas.py` formaliza la cota inferior: calcula los sitios de PV, acepta varios tamaños de BESS y verifica con un flujo AC. Además, reemplaza la cota de la prueba 2 por una cota horaria, que con 50 kW coincide con la inferior (12 818 kW, óptimo).

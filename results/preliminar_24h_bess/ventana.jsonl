@@ -1,0 +1,5 @@
+{"P_MW": 0.05, "ventana": "13-15", "status": 9, "t_s": 300.0, "cota_HC_kW": 12895.6, "HC_solucion_kW": 12813.3}
+{"P_MW": 0.5, "ventana": "13-15", "status": 9, "t_s": 300.0, "cota_HC_kW": 16658.8, "HC_solucion_kW": 13964.3}
+{"P_MW": 0.5, "ventana": "12-16", "status": 9, "t_s": 300.0, "cota_HC_kW": 17194.3, "HC_solucion_kW": 13792.6}
+{"P_MW": 1.0, "ventana": "13-15", "status": 9, "t_s": 300.0, "cota_HC_kW": 18055.7, "HC_solucion_kW": 14973.8}
+{"P_MW": 1.0, "ventana": "12-16", "status": 9, "t_s": 1162.0, "cota_HC_kW": 18516.1, "HC_solucion_kW": 14404.8}

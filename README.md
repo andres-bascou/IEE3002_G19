@@ -72,7 +72,7 @@ python3.10 -m venv .venv
 | Validar red y perfiles | `.venv/bin/python verificacion/comprobacion_red.py` (y los demás `comprobacion*.py`) | Gráficos en `results/figures/` |
 | **Etapa 1** | `.venv/bin/python verificacion/etapa1_caso_base.py` | Tablas por barra y rama, y PASS/FAIL |
 | **Etapa 2** (Tabla 1 de [4]) | `.venv/bin/python verificacion/etapa2_tabla1.py [--escenario 1\|2]` | HC vs [4], validación AC y PASS/FAIL; `results/etapa2_tabla1*.json` |
-| Pregunta 1: HC con BESS (24 h, cotas) | `.venv/bin/python experimentos/pregunta1_bess_cotas.py [--tamanos 0.05,0.5,1]` (~45 min por tamaño) | `results/pregunta1_bess_cotas.json` |
+| Pregunta 1: HC con BESS (24 h, cotas) | `.venv/bin/python experimentos/pregunta1_bess_cotas.py [--tamanos 0.05,0.5,1]` (~1 h por tamaño; conserva los tamaños ya guardados) | `results/pregunta1_bess_cotas.json` |
 | Pregunta 2: concentrado vs distribuido | `.venv/bin/python experimentos/pregunta2_concentrado_distribuido.py` (~3 min) | `results/pregunta2_concentrado_distribuido.json` y `results/figures/pregunta2/` |
 | Tabla 1 de [4] (PRELIMINAR) | `.venv/bin/python verificacion/preliminar_tabla1.py` | HC exacto vs relajado; `results/preliminar_tabla1.json` |
 | Pruebas de 24 h con BESS (PRELIMINAR) | Scripts en `verificacion/preliminar_24h_bess/` (ver su `README.md`) | `results/preliminar_24h_bess/*.jsonl` |
@@ -157,28 +157,29 @@ Reproduce el flujo de potencia AC de pandapower con el modelo de optimización, 
 - En ambos escenarios, el modelo y el flujo AC coinciden a ~1e-10 p.u., y la brecha relativa es ≤ 1e-5. El MIP gap es ≤ 1e-6, así que es el óptimo global.
 - [4] reporta para el escenario 1 una exportación de 4600 kW, I_max = 259 A y V_max = 1.0934 p.u. Aquí la exportación y la corriente coinciden, pero V_max llega a 1.10 p.u. Queda por revisar en el PDF de [4] si su V_max se mide en otro punto o con otra ubicación del PV (ellos asignan 12 kW a la barra 9).
 
-### Pregunta 1: HC con BESS (24 h, 2 × 50 kW / 100 kWh) 🟡 (falta el barrido de tamaños)
+### Pregunta 1: HC con BESS (24 h) 🟡 (barrido: faltan 0.25 y 2 MW)
 
 El modelo exacto de 24 h con BESS no cierra el gap en 10–20 min: tiene 1600 binarias y 768 igualdades no convexas. Por eso `experimentos/pregunta1_bess_cotas.py` no lo resuelve completo, sino que **acota su HC óptimo por los dos lados**:
 
 | Cota | Cómo se obtiene | Por qué es válida |
 |---|---|---|
-| **Inferior** | El modelo exacto, con sus binarias originales, con el PV solo en las barras del caso sin BESS (18 y 22) y el BESS solo en un par de barras candidatas. Se prueban 4 pares. | Cada solución es factible para el problema completo |
-| **Superior** | El problema completo con las binarias de carga y descarga (μ) relajadas a [0, 1] | Es una relajación del original |
+| **Inferior** | El modelo exacto, con sus binarias originales, con el PV solo en las barras del caso sin BESS (18 y 22) y el BESS solo en un par de barras candidatas. Se prueban 4 pares, más las barras que elige la cota superior. | Cada solución es factible para el problema completo |
+| **Superior (horaria)** | Sin el estado de carga de la BESS, cada hora es un problema de un solo período (como la Tabla 1), con la BESS como inyección neta en [−P, P]. Se resuelve en las horas de mayor sol (13–15 h) y se toma el mínimo. | Cualquier solución de 24 h, mirada en una sola hora, es factible para ese problema; por eso HC* ≤ HC de cada hora |
 
-Caso: julio, exportación ≤ 4.6 MW, sin topes de PV activos.
+Caso: julio, exportación ≤ 4.6 MW, sin topes de PV activos, 2 baterías con autonomía τ = 2 h (energía = 2 × potencia).
 
-| | HC | Frente a sin BESS (12 643 kW) |
-|---|---|---|
-| Sin BESS (óptimo, ~2 min) | 12 643 kW, PV en 18 y 22 | — |
-| Cota inferior: BESS en 32 y 33 (óptimo con sitios fijos) | **12 818 kW** | +176 kW (+1.39 %) |
-| Cota superior (20 min) | **12 868 kW** | +226 kW (+1.78 %) |
+| BESS (por batería) | HC con BESS | Frente a sin BESS (12 643 kW) | Mejor ubicación de la BESS |
+|---|---|---|---|
+| 50 kW / 100 kWh (caso base) | **12 818 kW (óptimo: las dos cotas coinciden)** | +176 kW (+1.39 %) | 32 y 33 |
+| 500 kW / 1 MWh | **13 952 – 14 440 kW** (rango 3.5 %) | +1310 a +1797 kW (+10.4 a +14.2 %) | 32 y 33 |
+| 1 MW / 2 MWh | **14 613 – 16 136 kW** (rango 10.4 %) | +1970 a +3493 kW (+15.6 a +27.6 %) | 28 y 29 (o 30 y 31: 14 612 kW) |
 
-- **El HC óptimo con 2 × 50 kW de BESS está entre 12 818 y 12 868 kW**, un rango de solo 0.4 %. Las baterías aumentan el HC entre 1.4 y 1.8 %.
-- La mejor solución se verificó con un flujo AC de pandapower en las 24 horas. Cumple todos los límites (exportación 4600 kW, V ≤ 1.10, I ≤ 259 A) y coincide con el modelo a 3e-10 p.u.
-- **Las baterías rinden más lejos del PV**: con BESS en 32 y 33 el HC es 12 818 kW; con BESS en 17–18, 21–22 o 18–22, cerca de 12 783 kW. Es el mismo efecto de la pregunta 2: con el límite de exportación activo, más pérdidas permiten más PV.
-- **Por qué no se quitan las binarias μ.** Sin ellas, las baterías cargan y descargan a la vez a mediodía (36 casos en la cota superior). Con η = 0.95, eso disipa ~10 % de su potencia, como una carga ficticia que permite instalar más PV. Con 2 × 50 kW el efecto es chico, pero con baterías de MW inflaría el HC. Por eso esa versión sirve solo como cota.
-- **Qué no funcionó:** partir desde la solución sin BESS, `MIPFocus=3`, cotas explícitas en los flujos, y reformular con una binaria por hora solo en las horas de sol (416 binarias). Con esta última el gap quedó en 6.5 % a los 20 min. Los scripts y resultados de estas pruebas están en `verificacion/preliminar_24h_bess/` (PRELIMINAR).
+- **Con el caso base (2 × 50 kW) el HC es 12 818 kW, demostrado óptimo**: la cota horaria de las 14 h coincide con la solución factible. Las baterías del caso base suben el HC solo 1.4 %.
+- **Rendimiento decreciente:** cada kW de BESS aporta 1.8 kW de HC con 50 kW, ≥ 1.3 kW con 500 kW y ≥ 1.0 kW con 1 MW (según la cota inferior). Lo que limita es la **energía**: el excedente de PV dura varias horas alrededor del mediodía y con τ = 2 h la batería se llena antes. La cota horaria ignora la energía (sigue en ~1.8 kW por kW), por eso el rango se abre con baterías grandes. Que la cota inferior no suba al probar otros sitios (las barras de la hora crítica dan el mismo HC) sugiere que el óptimo está cerca de la cota inferior.
+- **Las baterías rinden más lejos del PV** (32 y 33 con PV en 18 y 22): con el límite de exportación activo, más pérdidas permiten más PV, el mismo efecto de la pregunta 2.
+- Todas las mejores soluciones se verificaron con un flujo AC de pandapower en las 24 horas: cumplen la exportación (4600 kW), V ≤ 1.10, I ≤ 284 A, y coinciden con el modelo a ~4e-10 p.u.
+- **Por qué no se quitan las binarias μ.** Sin ellas, las baterías cargan y descargan a la vez a mediodía. Con η = 0.95 eso disipa ~10 % de su potencia, como una carga ficticia que permite instalar más PV. La cota con μ relajadas (`--cota-mu`) también es válida, pero resultó más débil que la horaria en todos los tamaños (12 868, 16 637 y 17 977 kW) y tarda 20 min.
+- **Qué no funcionó** para resolver el modelo completo: partir desde la solución sin BESS, `MIPFocus=3`, cotas explícitas en los flujos, una binaria por hora solo con sol y una ventana de horas con estado de carga inicial libre. Los scripts y resultados están en `verificacion/preliminar_24h_bess/` (PRELIMINAR).
 
 ### Pregunta 2: PV concentrado vs distribuido 🟡 (carga base; falta 24 h)
 
@@ -256,7 +257,8 @@ Se generan con `.venv/bin/python presentacion/graficos_avance.py` (~7 s) en `res
 - [x] **Vertimiento:** el HC se define sin vertimiento.
 - [x] **BESS:** se mantiene la escala actual (2 × 50 kW / 100 kWh).
 - [x] **Límites de tensión oficiales:** 0.9–1.1 p.u., como [4] y los CSV.
-- [ ] **Pendiente:** ¿el límite de exportación de 4.6 MW se usa también en el modelo de 24 h? Por ahora solo lo impone `config_tabla1` (`p_s_ref_pu` sigue en `None` por defecto).
+- [x] **Límite de exportación de 4.6 MW también en 24 h** (`p_s_ref_pu = -0.46` por defecto), como el intercambio máximo de [4]. Así los resultados de 24 h se comparan con la Etapa 2, y es el límite que la BESS ayuda a levantar. Hay que declarar en el informe que con este límite el HC premia las pérdidas (ver pregunta 2), y en la pregunta 3 variarlo (4.6 MW, uno mayor y sin límite). Para correr sin límite: `HCConfig(p_s_ref_pu=None)`.
+- [x] **Barrido de tamaños de BESS (pregunta 1):** 2 baterías con τ = 2 h y potencias 0.05 (caso base), 0.25, 0.5, 1 y 2 MW cada una. El caso base sigue siendo 2 × 50 kW.
 
 **Etapa 2: replicar la Tabla 1 de [4]**
 - [x] Agregar al modelo una configuración "Tabla 1": `config_tabla1(escenario)`.
@@ -270,8 +272,8 @@ Se generan con `.venv/bin/python presentacion/graficos_avance.py` (~7 s) en `res
 - [ ] Corregir comentarios desactualizados (numeración de restricciones, I_base).
 
 **Etapa 3 y análisis**
-- [x] Modelo multiperíodo (24 h) con BESS, y comparar el HC con y sin baterías (pregunta 1) para 2 × 50 kW: HC entre 12 818 y 12 868 kW (+1.4 a +1.8 %), ver resultados arriba.
-- [ ] Barrido de tamaños de BESS con `experimentos/pregunta1_bess_cotas.py --tamanos ...` (~45 min por tamaño). Con baterías más grandes la ubicación del PV podría cambiar: conviene agregar a `--pares` los sitios que elija la cota superior. Falta que el grupo decida el rango de tamaños.
+- [x] Modelo multiperíodo (24 h) con BESS, y comparar el HC con y sin baterías (pregunta 1): con 2 × 50 kW el HC es 12 818 kW (+1.4 %, óptimo); con 2 × 0.5 y 2 × 1 MW, +10–14 % y +16–28 %. Ver resultados arriba.
+- [ ] Barrido de tamaños de BESS con `experimentos/pregunta1_bess_cotas.py --tamanos ...` (~1 h por tamaño; el JSON conserva los tamaños ya calculados). Faltan 0.25 y 2 MW. Con 2 MW el rango entre cotas será amplio: para cerrarlo haría falta una cota superior que considere la energía de la BESS.
 - [x] Generación concentrada vs distribuida (pregunta 2), en carga base: ver resultados arriba.
 - [ ] Pregunta 2 en el modelo de 24 h (sin BESS, ~2 min por corrida).
 - [ ] Análisis de sensibilidad de los parámetros (pregunta 3): eficiencias, DoD, τ, c_deg, tamaño de BESS, límites de exportación.
