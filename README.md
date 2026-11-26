@@ -2,7 +2,7 @@
 
 Proyecto del curso IEE3002 Optimización Avanzada para Ingeniería Eléctrica (PUC), grupo G19.
 
-El objetivo es maximizar la capacidad de alojamiento (*Hosting Capacity*, HC) de generación fotovoltaica en una red de distribución radial, permitiendo instalar baterías (BESS). Se usa un modelo MISOCP multiperíodo (24 h) basado en la relajación cónica del *Branch Flow Model* [6], [7], resuelto con Gurobi sobre la red IEEE 33-bus [12], y se toma como paper base a Blanco-Solano et al. [4].
+El objetivo es maximizar la capacidad de alojamiento (*Hosting Capacity*, HC) de generación fotovoltaica en una red de distribución radial, permitiendo instalar baterías (BESS). Se usa un modelo multiperíodo (24 h) basado en el *Branch Flow Model* [6], [7], resuelto con Gurobi sobre la red IEEE 33-bus [12], y se toma como paper base a Blanco-Solano et al. [4]. El informe lo formula como un MISOCP (relajación cónica), pero desde la Etapa 2 el equipo usa por defecto el **MIQCP exacto**; el MISOCP relajado queda para la pregunta 4.
 
 **Preguntas de investigación** (informe, Sec. I.C):
 1. ¿Cuánto cambia el HC con y sin BESS?
@@ -18,7 +18,14 @@ El objetivo es maximizar la capacidad de alojamiento (*Hosting Capacity*, HC) de
 | Modelo completo (PV + BESS, 24 h) | ✅ Implementado en `modelo/misocp_hc_bess.py`; desde la Etapa 2 es un MIQCP exacto (ver decisiones abajo) |
 | **Etapa 1:** replicar el flujo AC del caso base con el modelo | ✅ **Completada:** coincide con pandapower a ~1e-11 p.u. |
 | **Etapa 2:** replicar la Tabla 1 de [4] (solo PV) | ✅ **Completada** con el modelo exacto: 9266 vs 9262 kW y 8554 vs 8546 kW, validados con pandapower |
-| **Etapa 3:** modelo multiperíodo con BESS y comparación | ⬜ Pendiente |
+| **Etapa 3:** modelo multiperíodo con BESS y comparación | 🟡 En curso: barrido de BESS con límite de exportación listo (τ = 2 h); faltan sin límite, τ = 4 h y verificaciones (ver §5, Entrega final) |
+
+| Pregunta de investigación | Estado |
+|---|---|
+| 1. HC con y sin BESS | 🟡 Con límite de exportación: +3.5 % (0.5 MWh) a +25 % (8 MWh), certificado en AC; faltan sin límite y τ = 4 h |
+| 2. PV concentrado vs distribuido | ✅ Carga base y 24 h (julio, sin BESS): el óptimo usa 2–3 barras; repartir cuesta hasta 10 % |
+| 3. Sensibilidad de parámetros | 🟡 Sin BESS listo (fp, límite de exportación); falta la parte con BESS (η, SoC, fp) |
+| 4. Error de la relajación cónica | 🟡 Medido en la Tabla 1 de [4] (+28 % y +36 % de HC); script de 24 h listo, sin correr |
 
 ---
 
@@ -198,6 +205,66 @@ Caso: julio, exportación ≤ 4.6 MW, sin topes de PV activos, 2 baterías con a
 - **Con el límite de exportación, el HC premia las pérdidas.** Sumando los balances, HC = exportación + carga + pérdidas = 4600 + 3715 + pérdidas [kW]. Por eso al optimizador le conviene poner el PV al final de los ramales (barras 18 y 22), donde las pérdidas son mayores (951 kW). El PV uniforme pierde solo 342 kW y por eso su HC es menor. Este efecto es consecuencia de cómo se define el HC con un límite de intercambio y conviene discutirlo en el informe.
 - **Sin el límite de exportación**, lo que limita son la tensión máxima y la corriente, y el óptimo cambia de barras (25, 18 y 2).
 - **Optimalidad con pocos sitios:** con 6 a 12 sitios Gurobi no cierra el gap en 2 min. Pero el HC no puede bajar al permitir más sitios, y ya con 2 sitios (3 sin límite de exportación) se alcanza el HC sin restricción de sitios. Por lo tanto esos casos tienen ese mismo HC óptimo, y el script lo certifica así, sin resolverlos.
+
+### Entrega final: experimentos de 24 h con BESS 🟡 (en curso)
+
+> **Ojo: hay dos enfoques paralelos para la pregunta 1** y el equipo debe elegir cuál se reporta (o combinarlos).
+>
+> | | Cotas (sección anterior) | Enumeración (esta sección) |
+> |---|---|---|
+> | Barrido | tamaño fijo por batería | presupuesto de energía total Σ E ≤ B |
+> | SoC al final del día | restricción (19) del informe (≥) | cíclico (=) |
+> | Exportación | 4.6 MW | con y sin límite |
+>
+> - **Donde se solapan, coinciden a ±0.3 %:** 2 × 0.5 MW ≈ B = 2 MWh (13 952 vs 13 954 kW) y 2 × 1 MW ≈ B = 4 MWh (14 613 vs 14 653 kW).
+> - **Con 2 × 2 MW (8 MWh), las cotas encontraron 15 871 kW moviendo el PV a 22 y 33,** más que los 15 801 kW de la enumeración con el PV fijo en 18 y 22. La verificación con PV libre (`pregunta1_verificacion.py`) debe aclararlo.
+> - **La cota superior horaria de `pregunta1_bess_cotas.py` vale también para este barrido.**
+
+**Cómo seguir:** `caffeinate -dims bash experimentos/correr_experimentos.sh` corre o reanuda todo, en orden: P1 (barridos), verificación de P1, P3 con BESS y P4. Cada script guarda su avance en `results/` y salta lo ya resuelto. Se puede cortar con Ctrl-C y volver a lanzar. El registro queda en `results/logs/`. Tiempo estimado de lo que falta: 6–7 h.
+
+**Decisiones del equipo para la entrega final** (aplicadas en `experimentos/comun_24h.py`):
+- **D3, tamaño de BESS:** barrido de un presupuesto de energía Σ E_j ≤ B ∈ {0.5, 1, 2, 4, 8} MWh. El modelo elige ubicación y tamaño, sin costo de inversión. El costo se evalúa después con la frontera HC vs B.
+- **D3a, duración:** τ = E/P = 2 h fija, más un barrido con τ = 4 h, solo con el límite de exportación.
+- **D3b, sitios de BESS:** hasta 2 unidades en 8 barras candidatas (6, 9, 13, 18, 22, 25, 29, 33: extremos y puntos medios de los alimentadores).
+- **D5, día de diseño:** julio (perfil PV promedio del mes y demanda CEN del 31-jul).
+- **D6, límite de exportación de 4.6 MW:** se corre con y sin él.
+- **D7, factor de potencia:** unitario como caso base, más una sensibilidad con fp 0.95 absorbiendo.
+- **D9, SoC cíclico:** SoC_24 = SoC_0 (`soc_ciclico=True`), en vez de la restricción (19) del informe. Así el día se puede repetir.
+- **D8 y D10, método:**
+  - El MIQCP exacto de 24 h con BESS no cierra el gap si tiene que elegir los sitios (12–24 % en 20 min).
+  - Por eso el PV se fija en los sitios del óptimo sin BESS (tamaños libres) y se **enumeran** las 36 ubicaciones de BESS (8 solas + 28 pares). Cada una se resuelve exacta en 2–180 s (gap ≤ 1e-4) y se certifica con un flujo AC hora a hora.
+  - Los BESS cargan solo en horas con sol y descargan solo en las demás (`bess_horas_carga`). Esto reemplaza las binarias μ (con B = 2 MWh da el mismo HC con y sin ellas) y es 20× más rápido.
+- **Sin BESS** las horas no se acoplan. `experimentos/sin_bess_24h.py` resuelve solo las horas críticas y certifica con un flujo AC de 24 h. Da el mismo HC que el modelo completo (12 642.6 kW) en 3 s en vez de 97 s.
+
+**Pregunta 1, con límite de exportación, τ = 2 h** (`results/pregunta1_bess.json`, todas certificadas en AC):
+
+| B [MWh] | 0 | 0.5 | 1 | 2 | 4 | 8 |
+|---|---|---|---|---|---|---|
+| HC [kW] | 12 643 | 13 086 | 13 426 | 13 954 | 14 653 | 15 801 |
+| Aumento | — | +3.5 % | +6.2 % | +10.4 % | +15.9 % | +25.0 % |
+| BESS | — | 33 | 33 | 33 | 22 + 33 | 22 + 33 |
+| Horas activas | 13 | 12–13 | 12–14 | 12–14 | 11–14 | 11–15 |
+
+- Rendimientos decrecientes: el aumento por kWh de BESS baja de ~0.9 a ~0.29 kW de HC.
+- El mejor BESS está en la barra 33 (alimentador 6–33, sin PV), no junto al PV (18 y 22). Hay que explicarlo en el informe.
+- **Verificación pendiente:** en las verificaciones con el PV libre (B = 2, 4, 8) Gurobi perdió el arranque y quedó con gaps de 6–20 %, así que no se sabe aún si mover el PV mejora el HC. `experimentos/pregunta1_verificacion.py` las repite partiendo de la solución completa.
+
+**Pregunta 2 en 24 h** (`results/pregunta2_24h.json`): mismo patrón que en carga base.
+
+| Caso | Con límite de exportación | Sin límite de exportación |
+|---|---|---|
+| PV en 1 sola barra | 12 148 kW (−3.9 %) | 13 778 kW (−4.9 %) |
+| **Óptimo** | **12 643 kW**: 2 barras (22, 18) | **14 484 kW**: 3 barras (25, 18, 2) |
+| PV uniforme en las 32 barras | 11 833 kW (−6.4 %) | 13 047 kW (−9.9 %) |
+
+**Pregunta 3 sin BESS** (`results/pregunta3_sensibilidad.json`):
+
+| Límite de exportación | 0 MW | 2.3 MW | **4.6 MW** | 6.9 MW | sin límite |
+|---|---|---|---|---|---|
+| HC [kW] | 5 626 | 9 265 | **12 643** | 14 484 | 14 484 |
+
+- Desde ~6 MW de límite, limitan la corriente y la tensión, no la exportación.
+- **Con fp fijo 0.95 absorbiendo, el HC baja a 11 292 kW**, con o sin límite de exportación (gap ≤ 0.3 %). Absorber reactivos baja la tensión, pero sube la corriente, y se activa I_max (300 A). Un fp fijo empeora el HC; un control de reactivos variable podría mejorarlo. Esto responde la pregunta del feedback sobre el fp unitario.
 
 ### Hallazgos de la revisión del modelo (motivaron las decisiones de la Etapa 2)
 

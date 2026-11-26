@@ -28,6 +28,9 @@ Use the project venv, `.venv/bin/python` (Python 3.10). Every script resolves it
 .venv/bin/python verificacion/preliminar_tabla1.py     # PRELIMINAR: [4] Table 1, exact MIQCP vs relaxed MISOCP
 .venv/bin/python experimentos/pregunta2_concentrado_distribuido.py  # research question 2 on [4] Table 1 (~3 min) -> results/ + figure
 .venv/bin/python experimentos/pregunta1_bess_cotas.py [--tamanos 0.05,0.5]  # research question 1: lower/upper HC bounds with BESS, 24 h (~1 h per size, keeps saved sizes)
+caffeinate -dims bash experimentos/correr_experimentos.sh   # final-report runs (P1 sweep, P1 check, P3 with BESS, P4); resumable
+.venv/bin/python experimentos/pregunta2_24h.py             # question 2 in 24 h without BESS (~2 min)
+.venv/bin/python experimentos/pregunta3_sensibilidad.py --parte sin_bess   # question 3 without BESS (~45 min)
 .venv/bin/python presentacion/graficos_avance.py       # progress figures -> results/figures/avance/
 ```
 
@@ -60,6 +63,14 @@ Environment notes: `.venv` has everything in `requirements.txt` (gurobipy 10.0.3
   - Upper bound (hourly): drop the SoC constraints and relax μ, so each hour is a T = 1 problem (seconds to minutes). Any 24 h solution restricted to hour t is feasible for it, so HC* ≤ min_t HC_t over the peak hours. It ignores BESS energy, so it loosens with big batteries. The older bound with only μ relaxed (`--cota-mu`) is valid but weaker for every size.
 
   Results (July, τ = 2 h): 2 × 50 kW gives 12 818 kW, proven optimal (+1.4 %). 2 × 0.25 MW gives 13 425–13 541 kW. 2 × 0.5 MW gives 13 952–14 440 kW. 2 × 1 MW gives 14 613–16 136 kW. 2 × 2 MW gives 15 871–19 526 kW (best lower-bound run: BESS at 9/10, PV at 22/33, ended at 5 % gap, so it can likely improve). Gains show diminishing returns because BESS energy limits them, and the range between bounds widens with size (0 → 23 %). Don't drop the μ binaries for real solutions: without them the BESS charges and discharges at once to dissipate ~10 % of its power, a fake load that inflates HC.
+- **Two parallel approaches to question 1 exist; the team hasn't picked one yet.** The bounds approach above sweeps a fixed unit size and keeps the informe's (19) end-of-day SoC. The enumeration approach below sweeps an energy budget with a cyclic SoC. Where they overlap they agree within 0.3 %. At 2 × 2 MW the bounds method found 15 871 kW with PV at 22/33, which beats the enumeration's 15 801 kW with PV fixed at 18/22.
+- **Final-report experiments (24 h, July)** live in `experimentos/` and their decisions (D3–D10) are listed in README §5 "Entrega final". `bash experimentos/correr_experimentos.sh` runs or resumes all of them, and every script skips work already saved in `results/`.
+  - **With BESS, the exact model can't choose sites:** it leaves 12–24 % gaps after 20 min. So `pregunta1_bess.py` fixes PV at the no-BESS sites and enumerates the 36 BESS site sets. Each set solves exactly in seconds and is certified by an hourly pandapower flow (`comun_24h.flujo_ac_24h`).
+  - **Charge/discharge windows replace the μ binaries.** `bess_horas_carga` lets a BESS charge only in sunny hours and discharge only in the rest. That rules out the simultaneous charge/discharge that makes plain μ relaxation invalid. With B = 2 MWh it gives the same HC as with the binaries.
+  - **Without BESS the hours decouple**, so `sin_bess_24h.resolver_sin_bess` solves only the critical hours and certifies the solution with a 24 h AC flow.
+  - **Relaxed cones in some hours don't work.** Making only some hours exact weakened the bound, and the night hours went inexact (an arbitrary cone slack where the objective doesn't care). Make every hour exact.
+  - **Long runs need `caffeinate`.** Without it macOS sleeps, and Gurobi time limits overrun.
+  - **Spawn workers re-import `comun_24h.py` and `pregunta1_bess.py`,** so don't edit them while a sweep is running.
 - **Findings that motivated those decisions:**
   - **The relaxation is not exact once PV pushes a limit to bind.** The model inflates `l` (fictitious losses) to dump PV. On [4] Table 1 the relaxed MISOCP gives 11 818 / 11 663 kW, while the exact MIQCP (cone as equality, Gurobi `NonConvex=2`) gives 9266 / 8554 kW against [4]'s 9262 / 8546. The informe's exactness argument in Sec. II.G is wrong.
   - **Objective (1) doesn't measure HC.** Summing the nodal balances gives ΣP^PV − losses = ΣP^L − P_S, so it maximizes export, and with the export limit binding any HC from 8387 to 11 806 kW is optimal. [4] maximizes ΣP^PV (its eq. 10).
@@ -72,6 +83,7 @@ Environment notes: `.venv` has everything in `requirements.txt` (gurobipy 10.0.3
 
 - **Never use absolute paths** (e.g. `C:\Users\...`, `/Users/...`). Teammates run on different machines. Scripts compute the project root with `os.path.dirname(os.path.dirname(os.path.abspath(__file__)))` (or `Path(__file__).resolve().parents[1]`) and carry an `# OJO: NO usar rutas absolutas` comment. Keep that pattern in new scripts.
 - Regenerated `data/` CSVs should be byte-identical to the committed ones unless the change is intentional.
+- Results are committed. The validation and experiment scripts overwrite their `results/*.json` (and figures) on every run. If `git diff` shows only runtime fields (`tiempo_s`, `runtime_s`, `meta.created`), restore the files with `git checkout -- results/` instead of committing the noise.
 
 ## Architecture
 
@@ -80,8 +92,9 @@ Environment notes: `.venv` has everything in `requirements.txt` (gurobipy 10.0.3
 **`modelo/misocp_hc_bess.py`:**
 - `HCConfig` dataclass holds every parameter (bases, voltage/current limits, PV/BESS sizes and counts, efficiencies, SoC bounds, solver settings). Each default cites its source as `[R1]..[R6]` in the module docstring; keep those references when you change a value.
 - `build_network()` orients the tree by BFS from the slack bus and builds parent `pi(j)` and children `C(j)`. Branch quantities (`r`, `x`, `l`, `Pf`, `Qf`, `i_max`) are **indexed by the downstream node j**, not by line id. Load is `P_L(j,t) = P0_pu(j) * lambda_<customer_type>(t)`.
-- `build_model()` builds the Gurobi model. Voltage and current limits are variable bounds, not constraints. `Qpv` is fixed to 0 (unity power factor, constraint 16).
-- `extract_results()` computes the conic gap per branch. `save_results()` writes a JSON with `config`, `summary`, `topology` and `results`. `grafico_resultados.py` depends only on that JSON (no Gurobi needed), so changing the keys breaks the plotting script.
+- `load_inputs(cfg)` reads `data/` and returns `(net, alpha)`; with `flat_profiles=True` it skips the CSV profiles and sets λ = α = 1 (base load). `config_tabla1(escenario, **kw)` returns the [4] Table 1 `HCConfig` (T = 1, flat profiles, no BESS, `p_s_ref_pu=-0.46`), and `kw` overrides any field.
+- `build_model()` builds the Gurobi model. Voltage and current limits are variable bounds, not constraints. `Qpv` is fixed to 0 (unity power factor, constraint 16). `exact_cone` switches the branch constraint between `BFM_exacto[j,t]` (equality) and `SOC[j,t]` (≤). It sets `NonConvex=2` and `FeasibilityTol=1e-9` first and applies `cfg.gurobi_params` last, so those params override them. It returns `(model, X)`, and `X` also carries the index sets (`X["G_pv"]`, …). Experiments add constraints to `m` before `m.optimize()`, as the uniform-PV case in `pregunta2` does.
+- `extract_results()` computes the absolute and relative conic gap per branch and the fictitious losses r·(l − (P²+Q²)/v), which are `summary["conic_gap_rel"]` and `summary["fictitious_losses_MWh"]`. `save_results()` writes a JSON with `config`, `summary`, `topology` and `results`. `grafico_resultados.py` depends only on that JSON (no Gurobi needed), so changing the keys breaks the plotting script.
 - `data/` is located through the argument, then `$HC_DATA_DIR`, then `<root>/data`, then `./data`. `results/` is located through the argument, then `$HC_RESULTS_DIR`, then `<root>/results`.
 
 **Conventions shared by every file:**
@@ -91,4 +104,4 @@ Environment notes: `.venv` has everything in `requirements.txt` (gurobipy 10.0.3
 - Customer types per bus are set in `generacion_red.py` (19–22 `pequenas`, 24/25/30/31/32 `grandes`, the rest `regulados`) and map to the `lambda_*` demand columns.
 - Profiles have 24 rows with `periodo_t` = 1..24 and `hora` = 0..23. PV `alpha_t` is in [0, 1] (Calama, 1 kW nominal). Demand is the CEN 31-Jul-2026 data, normalized by peak (default) or by mean.
 
-`exploratorio/` holds the early exploratory script and its CSVs. The model does not use them. `experimentos/` holds the research-question experiments. They use the production model as is, with `HCConfig`/`config_tabla1` overrides, and reuse `verificacion/etapa2_tabla1.flujo_ac` for the AC check.
+`exploratorio/` holds the early exploratory script and its CSVs. The model does not use them. `experimentos/` holds the research-question experiments. They use the production model as is, with `HCConfig`/`config_tabla1` overrides, and reuse `verificacion/etapa2_tabla1.flujo_ac` and `LIMITES` for the AC check, so changing those breaks them as well. Set `HC_THREADS` to cap Gurobi threads in `pregunta2`.
