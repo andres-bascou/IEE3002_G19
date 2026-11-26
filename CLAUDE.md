@@ -27,6 +27,7 @@ Use the project venv, `.venv/bin/python` (Python 3.10). Every script resolves it
 .venv/bin/python verificacion/etapa2_tabla1.py [--escenario 1|2]  # Etapa 2: [4] Table 1, exact MIQCP + AC check, exits 0 on PASS
 .venv/bin/python verificacion/preliminar_tabla1.py     # PRELIMINAR: [4] Table 1, exact MIQCP vs relaxed MISOCP
 .venv/bin/python experimentos/pregunta2_concentrado_distribuido.py  # research question 2 on [4] Table 1 (~3 min) -> results/ + figure
+.venv/bin/python experimentos/pregunta1_bess_cotas.py [--tamanos 0.05,0.5]  # research question 1: lower/upper HC bounds with BESS, 24 h (~45 min per size)
 .venv/bin/python presentacion/graficos_avance.py       # progress figures -> results/figures/avance/
 ```
 
@@ -53,7 +54,11 @@ Environment notes: `.venv` has everything in `requirements.txt` (gurobipy 10.0.3
   The relaxed MISOCP (`exact_cone=False`) is kept for research question 4. Still open: whether the 4.6 MW export limit applies to the 24 h model (`p_s_ref_pu` defaults to `None`).
 - **Etapa 2:** `config_tabla1(escenario)` sets up [4] Table 1, and `verificacion/etapa2_tabla1.py` solves it and validates it with pandapower. Etapa 2 is done. Scenario 1 gives 9266 kW against 9262 (buses 18 and 22, as in [4]), and scenario 2 gives 8554 against 8546. Both PASS and solve in about 2 s.
 - **Research question 2 (carga base) is done:** `experimentos/pregunta2_concentrado_distribuido.py`. The maximum HC uses 2–3 buses. Spreading PV uniformly costs 7–9 %. With the export limit binding, HC = export + load + losses, so the optimum puts PV at feeder ends, where losses are highest. Cases with 6–12 sites are certified by monotonicity, because branch-and-bound doesn't close the gap there. The 24 h version is still pending.
-- **24 h with BESS doesn't close the gap** in 10 min (4.5–7 %). Of warm start, `MIPFocus=3`, BESS candidates limited to {18, 22} and explicit flow bounds, only limiting the candidates helped. README §7 lists the open ideas.
+- **24 h with BESS doesn't close the gap** in 10–20 min (4.5–7 %). Warm start, `MIPFocus=3`, explicit flow bounds and a one-binary-per-daylight-hour reformulation didn't help. So `experimentos/pregunta1_bess_cotas.py` bounds the HC instead of solving it:
+  - Lower bound: the exact model with the PV fixed to the no-BESS buses and the BESS to a candidate pair. It is feasible for the full problem.
+  - Upper bound: the full model with `mu_ch`/`mu_dis` relaxed to [0, 1].
+
+  For 2 × 50 kW: 12 818–12 868 kW, +1.4 to +1.8 % over no BESS. Don't drop the μ binaries for real solutions: without them the BESS charges and discharges at once to dissipate ~10 % of its power, a fake load that inflates HC.
 - **Findings that motivated those decisions:**
   - **The relaxation is not exact once PV pushes a limit to bind.** The model inflates `l` (fictitious losses) to dump PV. On [4] Table 1 the relaxed MISOCP gives 11 818 / 11 663 kW, while the exact MIQCP (cone as equality, Gurobi `NonConvex=2`) gives 9266 / 8554 kW against [4]'s 9262 / 8546. The informe's exactness argument in Sec. II.G is wrong.
   - **Objective (1) doesn't measure HC.** Summing the nodal balances gives ΣP^PV − losses = ΣP^L − P_S, so it maximizes export, and with the export limit binding any HC from 8387 to 11 806 kW is optimal. [4] maximizes ΣP^PV (its eq. 10).
