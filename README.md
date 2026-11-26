@@ -157,7 +157,7 @@ Reproduce el flujo de potencia AC de pandapower con el modelo de optimización, 
 - En ambos escenarios, el modelo y el flujo AC coinciden a ~1e-10 p.u., y la brecha relativa es ≤ 1e-5. El MIP gap es ≤ 1e-6, así que es el óptimo global.
 - [4] reporta para el escenario 1 una exportación de 4600 kW, I_max = 259 A y V_max = 1.0934 p.u. Aquí la exportación y la corriente coinciden, pero V_max llega a 1.10 p.u. Queda por revisar en el PDF de [4] si su V_max se mide en otro punto o con otra ubicación del PV (ellos asignan 12 kW a la barra 9).
 
-### Pregunta 1: HC con BESS (24 h) 🟡 (barrido: faltan 0.25 y 2 MW)
+### Pregunta 1: HC con BESS (24 h) 🟡 (barrido completo; con 1–2 MW el rango entre cotas es amplio)
 
 El modelo exacto de 24 h con BESS no cierra el gap en 10–20 min: tiene 1600 binarias y 768 igualdades no convexas. Por eso `experimentos/pregunta1_bess_cotas.py` no lo resuelve completo, sino que **acota su HC óptimo por los dos lados**:
 
@@ -171,12 +171,14 @@ Caso: julio, exportación ≤ 4.6 MW, sin topes de PV activos, 2 baterías con a
 | BESS (por batería) | HC con BESS | Frente a sin BESS (12 643 kW) | Mejor ubicación de la BESS |
 |---|---|---|---|
 | 50 kW / 100 kWh (caso base) | **12 818 kW (óptimo: las dos cotas coinciden)** | +176 kW (+1.39 %) | 32 y 33 |
+| 250 kW / 500 kWh | **13 425 – 13 541 kW** (rango 0.9 %) | +783 a +899 kW (+6.2 a +7.1 %) | 32 y 33 |
 | 500 kW / 1 MWh | **13 952 – 14 440 kW** (rango 3.5 %) | +1310 a +1797 kW (+10.4 a +14.2 %) | 32 y 33 |
 | 1 MW / 2 MWh | **14 613 – 16 136 kW** (rango 10.4 %) | +1970 a +3493 kW (+15.6 a +27.6 %) | 28 y 29 (o 30 y 31: 14 612 kW) |
+| 2 MW / 4 MWh | **15 871 – 19 526 kW** (rango 23 %) | +3228 a +6883 kW (+25.5 a +54.4 %) | 9 y 10, con PV en 22 y 33 (gap 5 %, mejorable) |
 
 - **Con el caso base (2 × 50 kW) el HC es 12 818 kW, demostrado óptimo**: la cota horaria de las 14 h coincide con la solución factible. Las baterías del caso base suben el HC solo 1.4 %.
-- **Rendimiento decreciente:** cada kW de BESS aporta 1.8 kW de HC con 50 kW, ≥ 1.3 kW con 500 kW y ≥ 1.0 kW con 1 MW (según la cota inferior). Lo que limita es la **energía**: el excedente de PV dura varias horas alrededor del mediodía y con τ = 2 h la batería se llena antes. La cota horaria ignora la energía (sigue en ~1.8 kW por kW), por eso el rango se abre con baterías grandes. Que la cota inferior no suba al probar otros sitios (las barras de la hora crítica dan el mismo HC) sugiere que el óptimo está cerca de la cota inferior.
-- **Las baterías rinden más lejos del PV** (32 y 33 con PV en 18 y 22): con el límite de exportación activo, más pérdidas permiten más PV, el mismo efecto de la pregunta 2.
+- **Rendimiento decreciente:** cada kW de BESS aporta 1.8 kW de HC con 50 kW, ≥ 1.6 kW con 250 kW, ≥ 1.3 kW con 500 kW, ≥ 1.0 kW con 1 MW y ≥ 0.8 kW con 2 MW (según la cota inferior). Lo que limita es la **energía**: el excedente de PV dura varias horas alrededor del mediodía y con τ = 2 h la batería se llena antes. La cota horaria ignora la energía (sigue en ~1.7–1.8 kW por kW), por eso el rango se abre con baterías grandes: 0 % con 50 kW, 0.9 % con 250 kW, 3.5 % con 500 kW, 10 % con 1 MW y 23 % con 2 MW. Que la cota inferior no suba al probar otros sitios (las barras de la hora crítica dan el mismo HC) sugiere que el óptimo está cerca de la cota inferior.
+- **Hasta 1 MW, las baterías rinden más lejos del PV** (32 y 33 con PV en 18 y 22): con el límite de exportación activo, más pérdidas permiten más PV, el mismo efecto de la pregunta 2. Con 2 MW la mejor solución encontrada cambia de forma: BESS en 9 y 10 (a mitad del alimentador) y PV repartido entre 22 y 33 (~7.9 MW cada una). Esa corrida terminó con gap 5 % en 10 min, así que la cota inferior de 2 MW probablemente se puede mejorar.
 - Todas las mejores soluciones se verificaron con un flujo AC de pandapower en las 24 horas: cumplen la exportación (4600 kW), V ≤ 1.10, I ≤ 284 A, y coinciden con el modelo a ~4e-10 p.u.
 - **Por qué no se quitan las binarias μ.** Sin ellas, las baterías cargan y descargan a la vez a mediodía. Con η = 0.95 eso disipa ~10 % de su potencia, como una carga ficticia que permite instalar más PV. La cota con μ relajadas (`--cota-mu`) también es válida, pero resultó más débil que la horaria en todos los tamaños (12 868, 16 637 y 17 977 kW) y tarda 20 min.
 - **Qué no funcionó** para resolver el modelo completo: partir desde la solución sin BESS, `MIPFocus=3`, cotas explícitas en los flujos, una binaria por hora solo con sol y una ventana de horas con estado de carga inicial libre. Los scripts y resultados están en `verificacion/preliminar_24h_bess/` (PRELIMINAR).
@@ -272,8 +274,9 @@ Se generan con `.venv/bin/python presentacion/graficos_avance.py` (~7 s) en `res
 - [ ] Corregir comentarios desactualizados (numeración de restricciones, I_base).
 
 **Etapa 3 y análisis**
-- [x] Modelo multiperíodo (24 h) con BESS, y comparar el HC con y sin baterías (pregunta 1): con 2 × 50 kW el HC es 12 818 kW (+1.4 %, óptimo); con 2 × 0.5 y 2 × 1 MW, +10–14 % y +16–28 %. Ver resultados arriba.
-- [ ] Barrido de tamaños de BESS con `experimentos/pregunta1_bess_cotas.py --tamanos ...` (~1 h por tamaño; el JSON conserva los tamaños ya calculados). Faltan 0.25 y 2 MW. Con 2 MW el rango entre cotas será amplio: para cerrarlo haría falta una cota superior que considere la energía de la BESS.
+- [x] Modelo multiperíodo (24 h) con BESS, y comparar el HC con y sin baterías (pregunta 1): con 2 × 50 kW el HC es 12 818 kW (+1.4 %, óptimo); con 2 × 0.25, 0.5, 1 y 2 MW, +6–7 %, +10–14 %, +16–28 % y +26–54 %. Ver resultados arriba.
+- [x] Barrido de tamaños de BESS con `experimentos/pregunta1_bess_cotas.py --tamanos ...` (~1 h por tamaño; el JSON conserva los tamaños ya calculados): 0.05, 0.25, 0.5, 1 y 2 MW.
+- [ ] Cerrar el rango entre cotas con baterías grandes (10 % con 1 MW, 23 % con 2 MW): haría falta una cota superior que considere la energía de la BESS, y una cota inferior mejor para 2 MW (la mejor corrida terminó con gap 5 %).
 - [x] Generación concentrada vs distribuida (pregunta 2), en carga base: ver resultados arriba.
 - [ ] Pregunta 2 en el modelo de 24 h (sin BESS, ~2 min por corrida).
 - [ ] Análisis de sensibilidad de los parámetros (pregunta 3): eficiencias, DoD, τ, c_deg, tamaño de BESS, límites de exportación.
