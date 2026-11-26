@@ -107,7 +107,9 @@ class HCConfig:
     # OJO: Gmax = 500 kW de paramV2.py es el trafo del problema EV (otra escala);
     # NO se usa aquí porque la demanda IEEE-33 (3.715 MW) lo haría infactible.
     s_sub_max_pu: float = 1.0                # capacidad transformador SE [p.u.]
-    p_s_ref_pu: Optional[float] = None       # P_S >= p_s_ref (None = sin límite; 0 = sin retorno)
+    # P_S >= p_s_ref (None = sin límite; 0 = sin retorno). Decisión del equipo: exportación <= 4.6 MW
+    # también en 24 h, como el intercambio máximo con la red aguas arriba de [R2] Sec. 4.1.
+    p_s_ref_pu: Optional[float] = -0.46
 
     # --- PV -------------------------------------------------------------------
     p_pv_max_mw: float = 2.0                 # por proyecto [MW]
