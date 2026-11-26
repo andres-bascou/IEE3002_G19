@@ -54,7 +54,7 @@ Environment notes: `.venv` has everything in `requirements.txt` (gurobipy 10.0.3
   The relaxed MISOCP (`exact_cone=False`) is kept for research question 4. Still open: whether the 4.6 MW export limit applies to the 24 h model (`p_s_ref_pu` defaults to `None`).
 - **Etapa 2:** `config_tabla1(escenario)` sets up [4] Table 1, and `verificacion/etapa2_tabla1.py` solves it and validates it with pandapower. Etapa 2 is done. Scenario 1 gives 9266 kW against 9262 (buses 18 and 22, as in [4]), and scenario 2 gives 8554 against 8546. Both PASS and solve in about 2 s.
 - **Research question 2 (carga base) is done:** `experimentos/pregunta2_concentrado_distribuido.py`. The maximum HC uses 2–3 buses. Spreading PV uniformly costs 7–9 %. With the export limit binding, HC = export + load + losses, so the optimum puts PV at feeder ends, where losses are highest. Cases with 6–12 sites are certified by monotonicity, because branch-and-bound doesn't close the gap there. The 24 h version is still pending.
-- **24 h with BESS doesn't close the gap** in 10–20 min (4.5–7 %). Warm start, `MIPFocus=3`, explicit flow bounds and a one-binary-per-daylight-hour reformulation didn't help. So `experimentos/pregunta1_bess_cotas.py` bounds the HC instead of solving it:
+- **24 h with BESS doesn't close the gap** in 10–20 min (4.5–7 %). Warm start, `MIPFocus=3`, explicit flow bounds and a one-binary-per-daylight-hour reformulation didn't help (scripts and results in `verificacion/preliminar_24h_bess/`, PRELIMINAR). So `experimentos/pregunta1_bess_cotas.py` bounds the HC instead of solving it:
   - Lower bound: the exact model with the PV fixed to the no-BESS buses and the BESS to a candidate pair. It is feasible for the full problem.
   - Upper bound: the full model with `mu_ch`/`mu_dis` relaxed to [0, 1].
 
@@ -65,7 +65,7 @@ Environment notes: `.venv` has everything in `requirements.txt` (gurobipy 10.0.3
   - **The old results don't show a real HC.** With `curtailment_allowed=True` the network never limits HC, so it equals n_pv_max × p_pv_max. The 6 MW in the old `results/hc_bess_results_m7_*.json` runs is that artifact.
   - **The BESS defaults (2 × 50 kW / 100 kWh) come from an EV problem** and barely change HC.
   - **Fixed in Etapa 2:** the voltage fallback is now 0.90/1.10, and `summary["conic_exact"]` uses the relative gap (`tol_gap_rel`).
-- **Keep preliminary or exploratory model variants out of `modelo/`.** Put them in `verificacion/` and label them PRELIMINAR, as `preliminar_tabla1.py` is.
+- **Keep preliminary or exploratory model variants out of `modelo/`.** Put them in `verificacion/` and label them PRELIMINAR, as `preliminar_tabla1.py` and `preliminar_24h_bess/` are. The latter's scripts append one JSON line per run to `results/preliminar_24h_bess/<script>.jsonl` (honoring `$HC_RESULTS_DIR`).
 
 ## Rules
 
