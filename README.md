@@ -35,7 +35,8 @@ El objetivo es maximizar la capacidad de alojamiento (*Hosting Capacity*, HC) de
 │   └── pv_profiles/             Perfil solar alpha_t por mes y matriz anual
 ├── preprocesamiento/            Scripts que generan data/ a partir de data/raw/
 ├── verificacion/                Validaciones: red, perfiles, Etapa 1 (etapa1_caso_base.py),
-│                                Etapa 2 (etapa2_tabla1.py) y exacto vs relajado (preliminar_tabla1.py)
+│                                Etapa 2 (etapa2_tabla1.py), exacto vs relajado (preliminar_tabla1.py)
+│                                y pruebas PRELIMINARES de 24 h con BESS (preliminar_24h_bess/)
 ├── modelo/                      misocp_hc_bess.py (modelo en Gurobi) y grafico_resultados.py
 ├── experimentos/                Experimentos de las preguntas de investigación (preguntas 1 y 2)
 ├── presentacion/                graficos_avance.py: figuras de los avances para presentar
@@ -74,6 +75,7 @@ python3.10 -m venv .venv
 | Pregunta 1: HC con BESS (24 h, cotas) | `.venv/bin/python experimentos/pregunta1_bess_cotas.py [--tamanos 0.05,0.5,1]` (~45 min por tamaño) | `results/pregunta1_bess_cotas.json` |
 | Pregunta 2: concentrado vs distribuido | `.venv/bin/python experimentos/pregunta2_concentrado_distribuido.py` (~3 min) | `results/pregunta2_concentrado_distribuido.json` y `results/figures/pregunta2/` |
 | Tabla 1 de [4] (PRELIMINAR) | `.venv/bin/python verificacion/preliminar_tabla1.py` | HC exacto vs relajado; `results/preliminar_tabla1.json` |
+| Pruebas de 24 h con BESS (PRELIMINAR) | Scripts en `verificacion/preliminar_24h_bess/` (ver su `README.md`) | `results/preliminar_24h_bess/*.jsonl` |
 | Modelo completo (PV + BESS, 24 h) | `.venv/bin/python modelo/misocp_hc_bess.py` | `results/hc_bess_results_m<mes>_<fecha>.json` |
 | Dashboard de una corrida | `.venv/bin/python modelo/grafico_resultados.py [results/<archivo>.json]` | HTML interactivos en `results/figures/` |
 | Figuras de los avances | `.venv/bin/python presentacion/graficos_avance.py` | `results/figures/avance/` |
@@ -176,7 +178,7 @@ Caso: julio, exportación ≤ 4.6 MW, sin topes de PV activos.
 - La mejor solución se verificó con un flujo AC de pandapower en las 24 horas. Cumple todos los límites (exportación 4600 kW, V ≤ 1.10, I ≤ 259 A) y coincide con el modelo a 3e-10 p.u.
 - **Las baterías rinden más lejos del PV**: con BESS en 32 y 33 el HC es 12 818 kW; con BESS en 17–18, 21–22 o 18–22, cerca de 12 783 kW. Es el mismo efecto de la pregunta 2: con el límite de exportación activo, más pérdidas permiten más PV.
 - **Por qué no se quitan las binarias μ.** Sin ellas, las baterías cargan y descargan a la vez a mediodía (36 casos en la cota superior). Con η = 0.95, eso disipa ~10 % de su potencia, como una carga ficticia que permite instalar más PV. Con 2 × 50 kW el efecto es chico, pero con baterías de MW inflaría el HC. Por eso esa versión sirve solo como cota.
-- **Qué no funcionó:** partir desde la solución sin BESS, `MIPFocus=3`, cotas explícitas en los flujos, y reformular con una binaria por hora solo en las horas de sol (416 binarias). Con esta última el gap quedó en 6.5 % a los 20 min.
+- **Qué no funcionó:** partir desde la solución sin BESS, `MIPFocus=3`, cotas explícitas en los flujos, y reformular con una binaria por hora solo en las horas de sol (416 binarias). Con esta última el gap quedó en 6.5 % a los 20 min. Los scripts y resultados de estas pruebas están en `verificacion/preliminar_24h_bess/` (PRELIMINAR).
 
 ### Pregunta 2: PV concentrado vs distribuido 🟡 (carga base; falta 24 h)
 

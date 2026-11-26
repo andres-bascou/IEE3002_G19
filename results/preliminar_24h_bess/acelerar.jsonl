@@ -1,0 +1,5 @@
+{"variante": "B_cotas", "status": 2, "t_s": 206.7, "nodos": 77114, "HC_kW": 12642.6, "cota_HC_kW": 12642.6, "mip_gap": 0.0, "brecha_rel": 1.613906430050162e-16, "sitios": {"18": 4067.1, "22": 8575.5}, "bess": []}
+{"variante": "C_start", "status": 9, "t_s": 600.1, "nodos": 69497, "HC_kW": 12666.6, "cota_HC_kW": 13547.0, "mip_gap": 0.0695, "brecha_rel": 4.189206127401136e-05, "sitios": {"7": 6.2, "22": 5883.7, "31": 247.2, "32": 3.3, "33": 6526.2}, "bess": [18, 26]}
+{"variante": "C_start_focus", "status": 9, "t_s": 600.0, "nodos": 90007}
+{"variante": "C_cand", "status": 9, "t_s": 600.1, "nodos": 262333, "HC_kW": 12752.3, "cota_HC_kW": 13321.2, "mip_gap": 0.04461, "brecha_rel": 0.00017375726828998265, "sitios": {"7": 25.9, "8": 8.4, "18": 3039.2, "22": 9678.8}, "bess": [18, 22]}
+{"variante": "C_cand_start", "status": 9, "t_s": 600.1, "nodos": 236489, "HC_kW": 12654.0, "cota_HC_kW": 13370.4, "mip_gap": 0.05661, "brecha_rel": 4.517539824898318e-05, "sitios": {"22": 5876.5, "26": 13.1, "27": 0.8, "28": 93.3, "30": 2.8, "33": 6667.4}, "bess": [18, 22]}
