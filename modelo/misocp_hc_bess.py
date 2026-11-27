@@ -90,6 +90,10 @@ class HCConfig:
 
     # --- Formulación ----------------------------------------------------------
     exact_cone: bool = True                  # True: P^2+Q^2 = v*l (MIQCP); False: <= (MISOCP relajado)
+    # Con exact_cone=True: períodos t con la igualdad (None = todos). En los demás se usa el cono
+    # relajado (<=); si la solución resulta exacta en ellos (brecha relativa ~0), es óptima también
+    # para el modelo exacto, porque el modelo mixto es una relajación de él (ver experimentos/comun_24h.py).
+    exact_cone_horas: Optional[Iterable[int]] = None
     objective: str = "pv"                    # "pv": max sum P^PV [R2, ec. 10]; "informe": objetivo (1)
 
     # --- Red / simulación ---------------------------------------------------
@@ -116,6 +120,9 @@ class HCConfig:
     n_pv_max: int = 3
     pv_candidates: Optional[Iterable[int]] = None   # None = todas las barras N+
     curtailment_allowed: bool = False        # False => P_pv = alpha_t * P_cap (sin vertimiento)
+    # Factor de potencia fijo de los inversores. 1.0 = unitario [R2]; < 1 => el PV absorbe
+    # reactivos: Q_pv = -tan(acos(pv_pf)) * P_pv (control de tensión, sensibilidad de la pregunta 3).
+    pv_pf: float = 1.0
 
     # --- BESS -----------------------------------------------------------------
     p_b_max_mw: float = 0.050                # [MW]  = Dmax = Cmax = 50 kW   [R6]
@@ -124,11 +131,24 @@ class HCConfig:
     tau_max: float = 2.0                     # [h] (subir tau_max para dar flexibilidad)
     n_bess_max: int = 2
     bess_candidates: Optional[Iterable[int]] = None
+    # Presupuesto de energía total: sum_j E_j^{B,cap} <= e_b_budget_mwh (None = sin presupuesto).
+    # Sin costo de inversión en el objetivo, el barrido de este presupuesto da la frontera HC vs MWh.
+    e_b_budget_mwh: Optional[float] = None
+    # True: binarias mu^ch/mu^dis por hora (restr. 22-23), impiden cargar y descargar a la vez.
+    # False: se omiten (mucho más rápido); hay que revisar ex post summary["bess_simultaneo_MW"].
+    bess_mu_binaries: bool = True
+    bess_mu_horas: Optional[Iterable[int]] = None    # con bess_mu_binaries: períodos con binarias (None = todos)
+    # Ventanas de operación: si se da, los BESS cargan solo en estos períodos y descargan solo en los
+    # demás (p.ej. horas con sol). Excluye la carga y descarga simultáneas sin binarias.
+    bess_horas_carga: Optional[Iterable[int]] = None
     eta_ch: float = 0.95                     # [R3]
     eta_dis: float = 0.95                    # [R3]
     kappa_min: float = 0.10                  # DoD 80 % (documento del modelo)
     kappa_max: float = 0.90
     kappa_0: float = 0.10                    # = S0/Smax = 10 kWh / 100 kWh  [R6]
+    # False: SoC_T >= kappa_0 * E (restr. (19) del informe; el BESS puede terminar lleno).
+    # True: SoC_T = SoC_0 (operación cíclica: el día se puede repetir; decisión de la entrega final).
+    soc_ciclico: bool = False
     c_deg: float = 0.019                     # beta [R4]
 
     # --- Solver ---------------------------------------------------------------
@@ -368,7 +388,12 @@ def build_model(net: Network, alpha: pd.Series, cfg: HCConfig) -> Tuple[gp.Model
     w = m.addVars(G_pv, vtype=GRB.BINARY, name="w")
     Ppv_cap = m.addVars(G_pv, lb=0.0, name="Ppv_cap")
     Ppv = m.addVars(G_pv, T, lb=0.0, name="Ppv")
-    Qpv = m.addVars(G_pv, T, lb=0.0, ub=0.0, name="Qpv")   # FP unitario (restr. 9)
+    if not 0.0 < cfg.pv_pf <= 1.0:
+        raise ValueError(f"pv_pf debe estar en (0, 1], no {cfg.pv_pf}.")
+    if cfg.pv_pf >= 1.0:
+        Qpv = m.addVars(G_pv, T, lb=0.0, ub=0.0, name="Qpv")   # FP unitario (restr. 16)
+    else:
+        Qpv = m.addVars(G_pv, T, lb=-GRB.INFINITY, ub=0.0, name="Qpv")   # absorbe reactivos
 
     # ---- Variables BESS ----------------------------------------------------------
     z = m.addVars(G_b, vtype=GRB.BINARY, name="z")
@@ -377,8 +402,11 @@ def build_model(net: Network, alpha: pd.Series, cfg: HCConfig) -> Tuple[gp.Model
     Pch = m.addVars(G_b, T, lb=0.0, name="Pch")
     Pdis = m.addVars(G_b, T, lb=0.0, name="Pdis")
     SoC = m.addVars(G_b, T0, lb=0.0, name="SoC")
-    mu_ch = m.addVars(G_b, T, vtype=GRB.BINARY, name="mu_ch")
-    mu_dis = m.addVars(G_b, T, vtype=GRB.BINARY, name="mu_dis")
+    T_mu = [t for t in T if cfg.bess_mu_horas is None or t in set(cfg.bess_mu_horas)] \
+        if cfg.bess_mu_binaries else []
+    mu_ch = m.addVars(G_b, T_mu, vtype=GRB.BINARY, name="mu_ch")
+    mu_dis = m.addVars(G_b, T_mu, vtype=GRB.BINARY, name="mu_dis")
+    T_exact = set(T if cfg.exact_cone_horas is None else cfg.exact_cone_horas) if cfg.exact_cone else set()
 
     pv_set, b_set = set(G_pv), set(G_b)
     PVx = lambda j, t: Ppv[j, t] if j in pv_set else 0.0
@@ -406,7 +434,7 @@ def build_model(net: Network, alpha: pd.Series, cfg: HCConfig) -> Tuple[gp.Model
                         - 2.0 * (net.r[j] * Pf[j, t] + net.x[j] * Qf[j, t])
                         + (net.r[j] ** 2 + net.x[j] ** 2) * l[j, t], name=f"Vdrop[{j},{t}]")
             flujo2 = Pf[j, t] * Pf[j, t] + Qf[j, t] * Qf[j, t]
-            if cfg.exact_cone:      # ec. (15) de [R2]: l = |I|^2 exacto, sin pérdidas ficticias
+            if t in T_exact:        # ec. (15) de [R2]: l = |I|^2 exacto, sin pérdidas ficticias
                 m.addConstr(flujo2 == v[p, t] * l[j, t], name=f"BFM_exacto[{j},{t}]")
             else:                   # relajación cónica del informe (7)
                 m.addConstr(flujo2 <= v[p, t] * l[j, t], name=f"SOC[{j},{t}]")
@@ -425,12 +453,18 @@ def build_model(net: Network, alpha: pd.Series, cfg: HCConfig) -> Tuple[gp.Model
                 m.addConstr(Ppv[j, t] <= alpha[t] * Ppv_cap[j], name=f"PVgen[{j},{t}]")
             else:
                 m.addConstr(Ppv[j, t] == alpha[t] * Ppv_cap[j], name=f"PVgen[{j},{t}]")
+            if cfg.pv_pf < 1.0:
+                tan_phi = float(np.tan(np.arccos(cfg.pv_pf)))
+                m.addConstr(Qpv[j, t] == -tan_phi * Ppv[j, t], name=f"PVfp[{j},{t}]")
     m.addConstr(w.sum() <= cfg.n_pv_max, name="PVbudget")
 
     # ---- 9-20. BESS ------------------------------------------------------------------------------
     for j in G_b:
         m.addConstr(SoC[j, 0] == cfg.kappa_0 * Eb_cap[j], name=f"SoC0[{j}]")
-        m.addConstr(SoC[j, cfg.T] >= cfg.kappa_0 * Eb_cap[j], name=f"SoCT[{j}]")
+        if cfg.soc_ciclico:
+            m.addConstr(SoC[j, cfg.T] == SoC[j, 0], name=f"SoCT[{j}]")
+        else:
+            m.addConstr(SoC[j, cfg.T] >= cfg.kappa_0 * Eb_cap[j], name=f"SoCT[{j}]")
         for t in T:
             m.addConstr(SoC[j, t] == SoC[j, t - 1]
                         + (cfg.eta_ch * Pch[j, t] - Pdis[j, t] / cfg.eta_dis) * dt,
@@ -438,16 +472,24 @@ def build_model(net: Network, alpha: pd.Series, cfg: HCConfig) -> Tuple[gp.Model
             m.addConstr(SoC[j, t] >= cfg.kappa_min * Eb_cap[j], name=f"SoCmin[{j},{t}]")
             m.addConstr(SoC[j, t] <= cfg.kappa_max * Eb_cap[j], name=f"SoCmax[{j},{t}]")
             m.addConstr(Pch[j, t] <= Pb_cap[j], name=f"Pch_cap[{j},{t}]")
-            m.addConstr(Pch[j, t] <= mu_ch[j, t] * P_b_max, name=f"Pch_mu[{j},{t}]")
             m.addConstr(Pdis[j, t] <= Pb_cap[j], name=f"Pdis_cap[{j},{t}]")
-            m.addConstr(Pdis[j, t] <= mu_dis[j, t] * P_b_max, name=f"Pdis_mu[{j},{t}]")
-            m.addConstr(mu_ch[j, t] + mu_dis[j, t] <= z[j], name=f"Excl[{j},{t}]")
+            if cfg.bess_horas_carga is not None:
+                if t in set(cfg.bess_horas_carga):
+                    Pdis[j, t].UB = 0.0
+                else:
+                    Pch[j, t].UB = 0.0
+            if t in T_mu:
+                m.addConstr(Pch[j, t] <= mu_ch[j, t] * P_b_max, name=f"Pch_mu[{j},{t}]")
+                m.addConstr(Pdis[j, t] <= mu_dis[j, t] * P_b_max, name=f"Pdis_mu[{j},{t}]")
+                m.addConstr(mu_ch[j, t] + mu_dis[j, t] <= z[j], name=f"Excl[{j},{t}]")
         m.addConstr(Eb_cap[j] <= z[j] * E_b_max, name=f"Ecap[{j}]")
         m.addConstr(Pb_cap[j] <= z[j] * P_b_max, name=f"Pcap[{j}]")
         m.addConstr(Eb_cap[j] >= cfg.tau_min * Pb_cap[j], name=f"taumin[{j}]")
         m.addConstr(Eb_cap[j] <= cfg.tau_max * Pb_cap[j], name=f"taumax[{j}]")
     if G_b:
         m.addConstr(z.sum() <= cfg.n_bess_max, name="Bbudget")
+        if cfg.e_b_budget_mwh is not None:
+            m.addConstr(Eb_cap.sum() <= cfg.e_b_budget_mwh / E_base, name="Ebudget")
 
     # ---- Función objetivo ------------------------------------------------------------------------------
     if cfg.objective == "pv":
@@ -532,6 +574,11 @@ def extract_results(m: gp.Model, X: dict, net: Network, cfg: HCConfig) -> dict:
         "conic_gap_pu2": gap, "conic_gap_rel": gap_rel,
         "conic_exact": gap_rel <= cfg.tol_gap_rel, "runtime_s": m.Runtime,
         "exact_cone": cfg.exact_cone, "objective": cfg.objective,
+        # max_j,t min(P_ch, P_dis) [MW]: > 0 si un BESS carga y descarga en la misma hora
+        # (solo posible con bess_mu_binaries=False; disiparía energía por las eficiencias).
+        "bess_simultaneo_MW": max((min(val(X["Pch"][j, t]), val(X["Pdis"][j, t])) * S
+                                   for j in bess_sites["bus"] for t in T), default=0.0)
+                              if len(bess_sites) else 0.0,
     }
     # Flujos por rama (para graficar cargabilidad)
     i_base_ka = cfg.s_base_mva / (np.sqrt(3.0) * cfg.v_base_kv)

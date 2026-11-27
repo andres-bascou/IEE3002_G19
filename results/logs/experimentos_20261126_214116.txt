@@ -1,0 +1,26 @@
+=== 2026-11-26 21:41:16 experimentos/pregunta1_bess.py
+
+[con_limite|tau=2|P=0.05] 31 combinaciones (BESS, PV) (2 en paralelo)...
+[con_limite|tau=2|P=0.05 mejor b=32-33|pv=18-22] HC =  12818.2 kW | PV {18: 4104, 22: 8715} | BESS 32: 0.05 MW/0.10 MWh, 33: 0.05 MW/0.10 MWh | gap 6e-05 | 3 s | activos: V_max, exportación (h [13]) | cota superior 12818 kW (rango 0.0 %)
+[con_limite|P=0.25] cota superior horaria: 13541.2 kW (hora 13)
+
+[con_limite|tau=2|P=0.25] 31 combinaciones (BESS, PV) (2 en paralelo)...
+[con_limite|tau=2|P=0.25 mejor b=32-33|pv=18-22] HC =  13425.4 kW | PV {18: 4231, 22: 9194} | BESS 32: 0.25 MW/0.50 MWh, 33: 0.25 MW/0.50 MWh | gap 2e-05 | 5 s | activos: V_max, exportación (h [12, 13, 14]) | cota superior 13541 kW (rango 0.9 %)
+[con_limite|P=0.5] cota superior horaria: 14440.1 kW (hora 13)
+
+[con_limite|tau=2|P=0.5] 33 combinaciones (BESS, PV) (2 en paralelo)...
+[con_limite|tau=2|P=0.5 mejor b=32-33|pv=2-17-18-19-20-22] HC =  13952.3 kW | PV {18: 4343, 22: 9609} | BESS 32: 0.50 MW/1.00 MWh, 33: 0.50 MW/1.00 MWh | gap 7e-05 | 26 s | activos: V_max, exportación (h [12, 13, 14]) | cota superior 14440 kW (rango 3.5 %)
+[con_limite|P=1] cota superior horaria: 16136.0 kW (hora 13)
+
+[con_limite|tau=2|P=1] 33 combinaciones (BESS, PV) (2 en paralelo)...
+[con_limite|tau=2|P=1 mejor b=28-29|pv=14-15-16-17-18-22] HC =  14613.1 kW | PV {16: 2182, 17: 2799, 22: 9633} | BESS 28: 1.00 MW/2.00 MWh, 29: 1.00 MW/2.00 MWh | gap 1e-04 | 174 s | activos: V_max, exportación (h [11, 12, 13, 14]) | cota superior 16136 kW (rango 10.4 %)
+[con_limite|P=2] cota superior horaria: 19525.9 kW (hora 13)
+
+[con_limite|tau=2|P=2] 33 combinaciones (BESS, PV) (2 en paralelo)...
+[con_limite|tau=2|P=2 mejor b=9-10|pv=2-18-19-20-21-22-33] HC =  15858.6 kW | PV {22: 7936, 33: 7922} | BESS 9: 2.00 MW/4.00 MWh, 10: 2.00 MW/4.00 MWh | gap 9e-05 | 137 s | activos: V_max, exportación (h [11, 12, 13, 14, 15]) | cota superior 19526 kW (rango 23.1 %)
+[sin_limite|sin BESS] HC =  14400.8 kW | PV {2: 251, 4: 5, 5: 99, 6: 8, 9: 3848, 10: 713, 11: 104, 13: 24, 14: 754, 21: 3, 22: 243, 25: 1290, 27: 398, 28: 4139, 30: 1860, 31: 5, 33: 656} | BESS - | gap 2e-02 | 1200 s | activos: I_max, V_max (h [13])
+[sin_limite|P=0.05] cota superior horaria: 14641.0 kW (hora 13)
+
+[sin_limite|tau=2|P=0.05] 29 combinaciones (BESS, PV) (2 en paralelo)...
+/opt/homebrew/Cellar/python@3.10/3.10.14_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/multiprocessing/resource_tracker.py:224: UserWarning: resource_tracker: There appear to be 6 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '
