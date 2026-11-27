@@ -7,7 +7,7 @@ Compara, en el modelo de 24 h de julio, el MIQCP exacto (P^2 + Q^2 = v*l) con el
 informe (P^2 + Q^2 <= v*l), y valida las inyecciones de la solución relajada (PV y BESS) en un flujo
 AC de pandapower: si el modelo relajado "disipa" PV en pérdidas ficticias, la red real viola límites.
     * Sin BESS, con y sin el límite de exportación (PV en cualquier barra).
-    * Con BESS (B = 2 y 8 MWh, tau = 2 h, límite de exportación): relajado con la ubicación libre
+    * Con BESS (2 x 0.5 MW y 2 x 2 MW, tau = 2 h, límite de exportación): relajado con la ubicación libre
       (es convexo, así que elige sitios sin problema) y exacto con la mejor ubicación de
       experimentos/pregunta1_bess.py.
 La comparación de la Tabla 1 de [4] (carga base) ya está en verificacion/preliminar_tabla1.py.
@@ -25,17 +25,15 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # raíz del proyecto
 sys.path.insert(0, BASE_DIR)
 
-from experimentos.comun_24h import EXPORTACION, HORAS_SOL, config_24h, resolver_24h, resumen  # noqa: E402
+from experimentos.comun_24h import EXPORTACION, config_24h, resolver_24h, resumen  # noqa: E402
 
 RESULTS_JSON = os.path.join(BASE_DIR, "results", "pregunta4_relajacion.json")
 P1_JSON = os.path.join(BASE_DIR, "results", "pregunta1_bess.json")
 THREADS = int(os.environ.get("HC_THREADS", "0")) or None
-OPC_BESS = dict(bess_mu_binaries=False, bess_horas_carga=list(HORAS_SOL))
 
 
-def _relajado(B, exp) -> dict:
-    cfg = config_24h(B, p_s_ref=EXPORTACION[exp], exact_cone=False, time_limit=600, threads=THREADS,
-                     **(OPC_BESS if B > 0 else {}))
+def _relajado(P, exp) -> dict:
+    cfg = config_24h(P, p_s_ref=EXPORTACION[exp], exact_cone=False, time_limit=600, threads=THREADS)
     r = resolver_24h(cfg)
     s, ac = r["summary"], r["ac"]
     rs = resumen(r, ac)
@@ -52,14 +50,14 @@ def main() -> int:
     with open(P1_JSON, encoding="utf-8") as f:
         p1 = json.load(f)
     out = {"descripcion": "Pregunta 4: MIQCP exacto vs MISOCP relajado (julio, 24 h)", "casos": {}}
-    casos = [(0.0, "con_limite"), (0.0, "sin_limite"), (2.0, "con_limite"), (8.0, "con_limite")]
-    for B, exp in casos:
-        exacto = p1["sin_bess"][exp] if B == 0 else p1["corridas"][f"{exp}|tau=2|B={B:g}"]["mejor"]
-        rel = _relajado(B, exp)
-        c = {"B_MWh": B, "exportacion": exp, "exacto_HC_kW": exacto["HC_kW"], "relajado": rel,
+    casos = [(0.0, "con_limite"), (0.0, "sin_limite"), (0.5, "con_limite"), (2.0, "con_limite")]
+    for P, exp in casos:
+        exacto = p1["sin_bess"][exp] if P == 0 else p1["corridas"][f"{exp}|tau=2|P={P:g}"]["mejor"]
+        rel = _relajado(P, exp)
+        c = {"P_MW": P, "exportacion": exp, "exacto_HC_kW": exacto["HC_kW"], "relajado": rel,
              "sobreestimacion_pct": 100.0 * (rel["HC_kW"] / exacto["HC_kW"] - 1.0)}
-        out["casos"][f"{exp}|B={B:g}"] = c
-        print(f"  B = {B:g} MWh, {exp:<10}: exacto {exacto['HC_kW']:8.1f} kW | relajado {rel['HC_kW']:8.1f} kW "
+        out["casos"][f"{exp}|P={P:g}"] = c
+        print(f"  2 x {P:g} MW, {exp:<10}: exacto {exacto['HC_kW']:8.1f} kW | relajado {rel['HC_kW']:8.1f} kW "
               f"({c['sobreestimacion_pct']:+.1f} %), pérdidas ficticias {rel['perdidas_ficticias_MWh']:.2f} MWh | "
               f"AC del relajado: V_max {rel['ac_peor']['Vmax_pu']:.4f}, I_max {rel['ac_peor']['Imax_A']:.0f} A, "
               f"exportación {rel['ac_peor']['export_kW']:.0f} kW, viola en h {rel['horas_con_violacion']}",

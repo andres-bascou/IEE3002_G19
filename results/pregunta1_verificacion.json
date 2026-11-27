@@ -1,0 +1,253 @@
+{
+  "con_limite|tau=2|P=0.5": {
+    "HC_enumerado_kW": 13952.277406540645,
+    "HC_pv_libre_kW": 13952.30290603286,
+    "cota_pv_libre_kW": 13953.646740341033,
+    "mejora_max_pct": 0.009814410654906958,
+    "mejora_encontrada_pct": 0.00018276222206736747,
+    "sitios_pv_kW": {
+      "18": 4343.084235153296,
+      "22": 9609.211815991466
+    },
+    "bess": [
+      {
+        "bus": 32,
+        "P_MW": 0.5,
+        "E_MWh": 1.0
+      },
+      {
+        "bus": 33,
+        "P_MW": 0.5,
+        "E_MWh": 1.0
+      }
+    ],
+    "mip_gap": 9.631630829854483e-05,
+    "status": 2,
+    "tiempo_s": 338.49536895751953,
+    "viola_limites_AC": false
+  },
+  "con_limite|tau=2|P=1": {
+    "HC_enumerado_kW": 14613.052522878677,
+    "HC_pv_libre_kW": 14613.052522878677,
+    "cota_pv_libre_kW": 15253.118889316685,
+    "mejora_max_pct": 4.380100361891537,
+    "mejora_encontrada_pct": 0.0,
+    "sitios_pv_kW": {
+      "16": 2181.5826749811695,
+      "17": 2798.5666679560863,
+      "22": 9632.90317994142
+    },
+    "bess": [
+      {
+        "bus": 28,
+        "P_MW": 1.0,
+        "E_MWh": 2.0
+      },
+      {
+        "bus": 29,
+        "P_MW": 1.0,
+        "E_MWh": 2.0
+      }
+    ],
+    "mip_gap": 0.0438010036189152,
+    "status": 9,
+    "tiempo_s": 900.0065791606903,
+    "viola_limites_AC": false
+  },
+  "con_limite|tau=2|P=2": {
+    "HC_enumerado_kW": 15858.568435786096,
+    "HC_pv_libre_kW": 15858.568435786096,
+    "cota_pv_libre_kW": 17022.932963887542,
+    "mejora_max_pct": 7.342179294531825,
+    "mejora_encontrada_pct": 0.0,
+    "sitios_pv_kW": {
+      "22": 7936.092349471986,
+      "33": 7922.476086314108
+    },
+    "bess": [
+      {
+        "bus": 9,
+        "P_MW": 2.0,
+        "E_MWh": 4.0
+      },
+      {
+        "bus": 10,
+        "P_MW": 2.0,
+        "E_MWh": 4.0
+      }
+    ],
+    "mip_gap": 0.07342179294531845,
+    "status": 9,
+    "tiempo_s": 900.0060331821442,
+    "viola_limites_AC": false
+  },
+  "sin_limite|tau=2|P=0.5": {
+    "HC_enumerado_kW": 15685.325375999202,
+    "HC_pv_libre_kW": 15685.325375999202,
+    "cota_pv_libre_kW": 16100.646012543568,
+    "mejora_max_pct": 2.6478292709175566,
+    "mejora_encontrada_pct": 0.0,
+    "sitios_pv_kW": {
+      "2": 496.1363714760824,
+      "16": 4242.284382332387,
+      "18": 251.2647159289771,
+      "24": 81.3371707020665,
+      "25": 10614.302735559688
+    },
+    "bess": [
+      {
+        "bus": 32,
+        "P_MW": 0.5,
+        "E_MWh": 1.0
+      },
+      {
+        "bus": 33,
+        "P_MW": 0.5,
+        "E_MWh": 1.0
+      }
+    ],
+    "mip_gap": 0.026478292709175875,
+    "status": 9,
+    "tiempo_s": 900.0062608718872,
+    "viola_limites_AC": false
+  },
+  "sin_limite|tau=2|P=1": {
+    "HC_enumerado_kW": 16422.61145211261,
+    "HC_pv_libre_kW": 16422.61145211261,
+    "cota_pv_libre_kW": 17166.866408402842,
+    "mejora_max_pct": 4.531891645006869,
+    "mejora_encontrada_pct": 0.0,
+    "sitios_pv_kW": {
+      "2": 552.0406097094647,
+      "13": 5797.41828432152,
+      "25": 10073.152558081627
+    },
+    "bess": [
+      {
+        "bus": 32,
+        "P_MW": 1.0,
+        "E_MWh": 2.0
+      },
+      {
+        "bus": 33,
+        "P_MW": 1.0,
+        "E_MWh": 2.0
+      }
+    ],
+    "mip_gap": 0.04531891645006843,
+    "status": 9,
+    "tiempo_s": 900.0053629875183,
+    "viola_limites_AC": false
+  },
+  "sin_limite|tau=2|P=2": {
+    "HC_enumerado_kW": 17669.819263671656,
+    "HC_pv_libre_kW": 17669.819263671656,
+    "cota_pv_libre_kW": 18818.933602318757,
+    "mejora_max_pct": 6.503260285234647,
+    "mejora_encontrada_pct": 0.0,
+    "sitios_pv_kW": {
+      "12": 8573.170531076621,
+      "22": 9096.648732595033
+    },
+    "bess": [
+      {
+        "bus": 28,
+        "P_MW": 2.0,
+        "E_MWh": 4.0
+      },
+      {
+        "bus": 30,
+        "P_MW": 2.0,
+        "E_MWh": 4.0
+      }
+    ],
+    "mip_gap": 0.0650326028523467,
+    "status": 9,
+    "tiempo_s": 900.0042109489441,
+    "viola_limites_AC": false
+  },
+  "con_limite|tau=4|P=0.5": {
+    "HC_enumerado_kW": 14440.123645906982,
+    "HC_pv_libre_kW": 14440.123651513084,
+    "cota_pv_libre_kW": 14441.767561046365,
+    "mejora_max_pct": 0.011384356392607486,
+    "mejora_encontrada_pct": 3.8823078085670204e-08,
+    "sitios_pv_kW": {
+      "2": 50.825455666155804,
+      "17": 4754.7435962075415,
+      "22": 9634.554599639387
+    },
+    "bess": [
+      {
+        "bus": 32,
+        "P_MW": 0.5,
+        "E_MWh": 2.0
+      },
+      {
+        "bus": 33,
+        "P_MW": 0.5,
+        "E_MWh": 2.0
+      }
+    ],
+    "mip_gap": 0.00011384317565079422,
+    "status": 9,
+    "tiempo_s": 900.0064969062805,
+    "viola_limites_AC": false
+  },
+  "con_limite|tau=4|P=1": {
+    "HC_enumerado_kW": 15963.051519664308,
+    "HC_pv_libre_kW": 15963.051519664308,
+    "cota_pv_libre_kW": 16301.234285127808,
+    "mejora_max_pct": 2.1185345737116945,
+    "mejora_encontrada_pct": 0.0,
+    "sitios_pv_kW": {
+      "14": 2335.556829628906,
+      "15": 3989.764337949917,
+      "22": 9637.730352085486
+    },
+    "bess": [
+      {
+        "bus": 30,
+        "P_MW": 1.0,
+        "E_MWh": 4.0
+      },
+      {
+        "bus": 31,
+        "P_MW": 1.0,
+        "E_MWh": 4.0
+      }
+    ],
+    "mip_gap": 0.021185345737117268,
+    "status": 9,
+    "tiempo_s": 900.0054960250854,
+    "viola_limites_AC": false
+  },
+  "con_limite|tau=4|P=2": {
+    "HC_enumerado_kW": 18169.67502872979,
+    "HC_pv_libre_kW": 18169.675028729795,
+    "cota_pv_libre_kW": 19346.601006871002,
+    "mejora_max_pct": 6.477418975739857,
+    "mejora_encontrada_pct": 2.220446049250313e-14,
+    "sitios_pv_kW": {
+      "18": 155.1360385646675,
+      "22": 9299.805328715596,
+      "33": 8714.73366144953
+    },
+    "bess": [
+      {
+        "bus": 9,
+        "P_MW": 2.0,
+        "E_MWh": 8.0
+      },
+      {
+        "bus": 10,
+        "P_MW": 2.0,
+        "E_MWh": 8.0
+      }
+    ],
+    "mip_gap": 0.06477418975739883,
+    "status": 9,
+    "tiempo_s": 900.0087299346924,
+    "viola_limites_AC": false
+  }
+}

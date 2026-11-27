@@ -3,24 +3,22 @@ experimentos/comun_24h.py
 =========================
 Funciones comunes para los experimentos con el modelo multiperíodo (T = 24 h) y BESS.
 
-Decisiones del equipo para la entrega final (ver README, sección 7):
+Decisiones del equipo para la entrega final (ver README, sección 5, "Entrega final"):
     * Día de diseño: julio (perfil PV promedio del mes y demanda CEN del 31-jul).
-    * BESS: barrido de un presupuesto de energía sum_j E_j <= B [MWh]; ubicación y tamaño
-      los elige el modelo (sin costo de inversión). Hasta 2 unidades, en 8 barras candidatas
-      (extremos y puntos medios de los cuatro alimentadores). Duración fija tau = E/P.
+    * BESS de tamaño fijo por unidad: hasta 2 unidades de P MW y tau * P MWh cada una
+      (P en {0.05, 0.25, 0.5, 1, 2} MW, tau = 2 h y una sensibilidad con 4 h), como en
+      experimentos/pregunta1_bess_cotas.py. Sin costo de inversión: el costo se evalúa después.
+    * SoC al final del día: restricción (19) del informe, SoC_24 >= kappa_0 * E.
     * Límite de exportación de 4.6 MW de [4]: con y sin.
-    * SoC cíclico (SoC_24 = SoC_0): el día se puede repetir (reemplaza la restr. (19) del informe).
-    * Exactitud y binarias "perezosas" (resolver_24h): la igualdad cónica y las binarias de
-      carga/descarga se imponen solo en las horas que pueden limitar el HC (alpha_t >= 70 % del
-      máximo, HORAS_EXACTAS); en las demás se usa el cono relajado y no hay binarias. Este modelo
-      mixto es una relajación del exacto, así que su óptimo es una cota superior del HC. El
-      certificado de factibilidad es el flujo AC: si las inyecciones de la solución (PV y BESS)
-      cumplen todos los límites en el flujo AC de pandapower en cada hora, y ningún BESS carga y
-      descarga a la vez, el HC es alcanzable y por lo tanto óptimo. Si alguna hora falla, se le
-      imponen la igualdad y las binarias y se vuelve a resolver.
-      Pruebas con B = 2 MWh (20 min cada una): sin binarias, el BESS cargó y descargó a la vez para
-      disipar energía (gap 12.9 %); con igualdad y binarias en las 11 horas de sol, gap 18 %.
-    * Cada solución se valida hora a hora con un flujo AC de pandapower (flujo_ac_24h).
+    * Método (config_24h): cono exacto en todas las horas; en vez de las binarias mu, los BESS
+      cargan solo en las horas con sol y descargan solo en las demás (bess_horas_carga), lo que
+      excluye cargar y descargar a la vez. Los sitios se fijan y se enumeran (pregunta1_bess.py).
+      Se probó, y se descartó, dejar el cono relajado en algunas horas: debilita la cota, y en las
+      horas relajadas la holgura del cono queda arbitraria (gaps de 12-24 % en 20 min).
+    * Cada solución se valida hora a hora con un flujo AC de pandapower (flujo_ac_24h); resolver_24h
+      impone la igualdad en las horas que fallen y vuelve a resolver.
+    * Cota superior horaria (cota_horaria): sin el SoC cada hora es un problema T = 1 con la BESS
+      como inyección neta en [-P, P]; HC* <= min_t HC_t (método de pregunta1_bess_cotas.py).
 """
 import os
 import sys
@@ -52,21 +50,56 @@ FRAC_EXACTA = 0.70
 HORAS_EXACTAS = [int(t) for t in _alpha.index if _alpha[t] >= FRAC_EXACTA * _alpha.max()]
 
 
-def config_24h(B_mwh: float = 0.0, p_s_ref=-0.46, tau_h: float = 2.0, **kw) -> HCConfig:
+def config_24h(P_mw: float = 0.0, p_s_ref=-0.46, tau_h: float = 2.0, **kw) -> HCConfig:
     """Configuración base de la Etapa 3 (julio, 24 h, modelo exacto, max sum P^PV, sin vertimiento).
-    B_mwh = 0 => sin BESS. Cada unidad puede tomar todo el presupuesto (P <= B/tau, E <= B)."""
+    P_mw = potencia por unidad de BESS (hasta 2 unidades de P MW / tau*P MWh); 0 => sin BESS."""
     base = dict(T=24, month=MES, exact_cone=True, objective="pv", curtailment_allowed=False,
                 p_pv_max_mw=20.0, n_pv_max=32, pv_candidates=None, p_s_ref_pu=p_s_ref,
-                mip_gap=1e-4, time_limit=1200, output_flag=0,
-                exact_cone_horas=list(HORAS_EXACTAS), bess_mu_binaries=True, bess_mu_horas=list(HORAS_EXACTAS),
-                soc_ciclico=True)
-    if B_mwh > 0:
-        base.update(n_bess_max=2, bess_candidates=list(BESS_CANDIDATOS), e_b_budget_mwh=B_mwh,
-                    e_b_max_mwh=B_mwh, p_b_max_mw=B_mwh / tau_h, tau_min=tau_h, tau_max=tau_h)
+                mip_gap=1e-4, time_limit=1200, output_flag=0, exact_cone_horas=None,
+                bess_mu_binaries=False, bess_horas_carga=list(HORAS_SOL), soc_ciclico=False)
+    if P_mw > 0:
+        base.update(n_bess_max=2, bess_candidates=list(BESS_CANDIDATOS), p_b_max_mw=P_mw,
+                    e_b_max_mwh=tau_h * P_mw, tau_min=tau_h, tau_max=tau_h)
     else:
         base.update(n_bess_max=0, bess_candidates=[])
     base.update(kw)
     return HCConfig(**base)
+
+
+def cota_horaria(P_mw: float, p_s_ref, frac_alpha: float = 0.9, time_limit: float = 900.0,
+                 threads=None) -> dict:
+    """Cota superior del HC con 2 BESS de P MW (PV y BESS en cualquier barra). Sin el estado de carga,
+    la hora t sola es un problema T = 1 con la BESS como inyección neta en [-P, P]; cualquier solución
+    de 24 h restringida a la hora t es factible para él, así que HC* <= min_t HC_t. Se evalúan las horas
+    con alpha >= frac_alpha * max(alpha). Ignora la energía de la BESS (no depende de tau)."""
+    import dataclasses
+    import pandas as pd
+    cfg = config_24h(P_mw, p_s_ref=p_s_ref, bess_candidates=None, bess_horas_carga=None,
+                     time_limit=time_limit, threads=threads)
+    net, alpha = load_inputs(cfg)
+    horas, mejor = [], None
+    for t in [int(t) for t in alpha.index if alpha[t] >= frac_alpha * alpha.max()]:
+        net1 = dataclasses.replace(net, PL={(j, 1): net.PL[j, t] for j in net.nodes},
+                                   QL={(j, 1): net.QL[j, t] for j in net.nodes})
+        cfg1 = dataclasses.replace(cfg, T=1)
+        a1 = pd.Series([alpha[t]], index=[1], name="alpha")
+        m, X = build_model(net1, a1, cfg1)
+        m.update()
+        for c in m.getConstrs():
+            if c.ConstrName.startswith(("SoC0[", "SoCT[", "SoCdyn[", "SoCmin[", "SoCmax[")):
+                m.remove(c)
+        m.optimize()
+        S = cfg.s_base_mva * 1000.0
+        h = {"t": t, "hora": t - 1, "alpha": float(alpha[t]), "status": int(m.Status), "tiempo_s": m.Runtime,
+             "HC_cota_kW": m.ObjBound / float(alpha[t]) * S}
+        if m.SolCount:
+            h.update(HC_solucion_kW=m.ObjVal / float(alpha[t]) * S,
+                     pv_kW={int(j): X["Ppv_cap"][j].X * S for j in X["G_pv"] if X["Ppv_cap"][j].X * S >= 1.0},
+                     bess_kW={int(j): X["Pb_cap"][j].X * S for j in X["G_b"] if X["z"][j].X > 0.5})
+        horas.append(h)
+        if mejor is None or h["HC_cota_kW"] < mejor["HC_cota_kW"]:
+            mejor = h
+    return {"HC_cota_kW": mejor["HC_cota_kW"], "t": mejor["t"], "horas": horas}
 
 
 def _horas_violadas(ac: dict, cfg: HCConfig) -> list:

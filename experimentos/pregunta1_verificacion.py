@@ -23,13 +23,13 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # raíz del proyecto
 sys.path.insert(0, BASE_DIR)
 
-from experimentos.comun_24h import EXPORTACION, HORAS_SOL, config_24h, flujo_ac_24h, resumen  # noqa: E402
+from experimentos.comun_24h import EXPORTACION, config_24h, flujo_ac_24h, resumen  # noqa: E402
 from modelo.misocp_hc_bess import build_model, extract_results, load_inputs  # noqa: E402
 
 P1_JSON = os.path.join(BASE_DIR, "results", "pregunta1_bess.json")
 RESULTS_JSON = os.path.join(BASE_DIR, "results", "pregunta1_verificacion.json")
 THREADS = int(os.environ.get("HC_THREADS", "0")) or None
-OPC_BESS = dict(exact_cone_horas=None, bess_mu_binaries=False, bess_horas_carga=list(HORAS_SOL))
+P_MIN_VERIF = 0.5      # con 0.05 y 0.25 MW la cota horaria ya deja el HC en un rango <= 1 %
 
 
 def _arranque(X, sol, cfg, alpha):
@@ -81,10 +81,12 @@ def main() -> int:
     for k, run in p1["corridas"].items():
         if "archivo" not in run or k in out:
             continue
-        combo = [int(j) for j in run["mejor_combinacion"].split("-")]
-        cfg = config_24h(run["B_MWh"], p_s_ref=EXPORTACION[run["exportacion"]], tau_h=run["tau_h"],
+        if run["P_MW"] < P_MIN_VERIF:
+            continue
+        combo = [int(j) for j in run["mejor_combinacion"].split("|")[0][2:].split("-")]
+        cfg = config_24h(run["P_MW"], p_s_ref=EXPORTACION[run["exportacion"]], tau_h=run["tau_h"],
                          time_limit=args.time_limit, threads=THREADS, pv_candidates=None,
-                         bess_candidates=combo, n_bess_max=len(combo), **OPC_BESS)
+                         bess_candidates=combo, n_bess_max=2)
         net, alpha = load_inputs(cfg)
         m, X = build_model(net, alpha, cfg)
         with open(os.path.join(BASE_DIR, run["archivo"]), encoding="utf-8") as f:
