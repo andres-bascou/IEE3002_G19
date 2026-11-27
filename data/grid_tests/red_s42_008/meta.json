@@ -1,0 +1,30 @@
+{
+  "red": "red_s42_008",
+  "semilla": 42,
+  "k": 8,
+  "intentos": 4,
+  "parametros": {
+    "n_barras_min": 15,
+    "n_barras_max": 45,
+    "p_cadena_min": 0.5,
+    "p_cadena_max": 0.9,
+    "sigma_z": 0.25,
+    "sigma_carga": 0.3,
+    "v_min_base": 0.905
+  },
+  "referencia": "IEEE 33-bus (data/grid)",
+  "n_barras": 27,
+  "profundidad_max": 13,
+  "n_hojas": 4,
+  "n_ramales": 3,
+  "P_total_MW": 1.9280761052700732,
+  "Q_total_MVAR": 0.9953976443529347,
+  "r_total_pu": 1.0495327121253637,
+  "x_total_pu": 0.8696549477879857,
+  "z_max_a_subestacion_pu": 0.7716186462575267,
+  "firma_topologia": "3a44cf0e4e",
+  "n_lineas": 26,
+  "p_cadena": 0.6708605149645704,
+  "v_min_base_pu": 0.9309161999048449,
+  "carga_max_rama_pct": 34.8718450661539
+}
