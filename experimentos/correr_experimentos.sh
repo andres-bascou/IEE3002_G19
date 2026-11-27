@@ -20,7 +20,7 @@ correr() {
     return "$rc"
 }
 correr experimentos/pregunta1_bess.py || { echo "=== P1 falló: se detiene (los demás dependen de él)" | tee -a "$LOG"; exit 1; }   # P1: cotas horarias + enumeración, barridos A y B; reanudable
-correr experimentos/pregunta3_sensibilidad.py --parte bess   # P3: eficiencia, SoC y fp con BESS
-correr experimentos/pregunta4_relajacion.py        # P4: exacto vs relajado en 24 h
+correr experimentos/pregunta3_sensibilidad_entrega_final.py --parte bess   # P3: eficiencia, SoC y fp con BESS
+correr experimentos/pregunta4_relajacion_entrega_final.py        # P4: exacto vs relajado en 24 h
 correr experimentos/pregunta1_verificacion.py      # P1: ¿mover el PV mejora el HC? (15 min por configuración)
 echo "=== $(date '+%F %T') listo" | tee -a "$LOG"

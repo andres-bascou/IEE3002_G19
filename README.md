@@ -23,9 +23,9 @@ El objetivo es maximizar la capacidad de alojamiento (*Hosting Capacity*, HC) de
 | Pregunta de investigación | Estado |
 |---|---|
 | 1. HC con y sin BESS | ✅ De +1.1–1.4 % (2 × 50 kW, óptimo) a +22–25 % (2 × 2 MW, τ = 2 h) y +44 % (τ = 4 h); la energía es lo que limita |
-| 2. PV concentrado vs distribuido | ✅ Carga base y 24 h (julio, sin BESS): el óptimo usa 2–3 barras; repartir cuesta hasta 10 % |
-| 3. Sensibilidad de parámetros | ✅ Límite de exportación, fp, τ, η y ventana de SoC |
-| 4. Error de la relajación cónica | ✅ +28–36 % en la Tabla 1 de [4] y +13–29 % en 24 h; sus soluciones violan los límites en AC |
+| 2. PV concentrado vs distribuido | ✅ Carga base y 24 h (julio, sin BESS), en dos versiones que coinciden: el óptimo usa 2–3 barras; repartir cuesta hasta 10 % |
+| 3. Sensibilidad de parámetros | ✅ Dos versiones complementarias: límites de red, mes y BESS (`pregunta3_sensibilidad.py`); exportación, fp, η y SoC en 24 h (`pregunta3_sensibilidad_entrega_final.py`) |
+| 4. Error de la relajación cónica | ✅ +12–36 % en la Tabla 1 de [4] y +13–29 % en 24 h (dos versiones que coinciden); sus soluciones violan los límites en AC |
 
 ---
 
@@ -45,7 +45,7 @@ El objetivo es maximizar la capacidad de alojamiento (*Hosting Capacity*, HC) de
 │                                Etapa 2 (etapa2_tabla1.py), exacto vs relajado (preliminar_tabla1.py)
 │                                y pruebas PRELIMINARES de 24 h con BESS (preliminar_24h_bess/)
 ├── modelo/                      misocp_hc_bess.py (modelo en Gurobi) y grafico_resultados.py
-├── experimentos/                Experimentos de las preguntas de investigación (preguntas 1 y 2)
+├── experimentos/                Experimentos de las preguntas de investigación (preguntas 1 a 4)
 ├── presentacion/                graficos_avance.py: figuras de los avances para presentar
 ├── exploratorio/                Primera exploración de la instancia (ya no se usa)
 └── results/                     JSON de cada corrida y figures/ (figuras y dashboards)
@@ -81,6 +81,13 @@ python3.10 -m venv .venv
 | **Etapa 2** (Tabla 1 de [4]) | `.venv/bin/python verificacion/etapa2_tabla1.py [--escenario 1\|2]` | HC vs [4], validación AC y PASS/FAIL; `results/etapa2_tabla1*.json` |
 | Pregunta 1: HC con BESS (24 h, cotas) | `.venv/bin/python experimentos/pregunta1_bess_cotas.py [--tamanos 0.05,0.5,1]` (~1 h por tamaño; conserva los tamaños ya guardados) | `results/pregunta1_bess_cotas.json` |
 | Pregunta 2: concentrado vs distribuido | `.venv/bin/python experimentos/pregunta2_concentrado_distribuido.py` (~3 min) | `results/pregunta2_concentrado_distribuido.json` y `results/figures/pregunta2/` |
+| Pregunta 2 en 24 h | `.venv/bin/python experimentos/pregunta2_24h.py [--exportacion con,sin]` (~1 h) | `results/pregunta2_24h.json` y `results/figures/pregunta2/hc_concentrado_distribuido_24h.*` |
+| Pregunta 3: sensibilidad | `.venv/bin/python experimentos/pregunta3_sensibilidad.py [--bloques red,mes,bess]` (red ~15 min, mes ~30 min, bess ~35 min) | `results/pregunta3_sensibilidad.json` y `results/figures/pregunta3/` |
+| Pregunta 4: error de la relajación | `.venv/bin/python experimentos/pregunta4_relajacion.py [--bess]` (~15 min) | `results/pregunta4_relajacion.json` |
+| Entrega final, todas las corridas (P1–P4) | `caffeinate -dims bash experimentos/correr_experimentos.sh` (~8 h; reanudable) | `results/pregunta1_bess.json`, `results/pregunta1/`, `results/*_entrega_final.json`, `results/logs/` |
+| Entrega final, pregunta 2 en 24 h | `.venv/bin/python experimentos/pregunta2_24h_entrega_final.py` (~2 min) | `results/pregunta2_24h_entrega_final.json` |
+| Entrega final, pregunta 3 | `.venv/bin/python experimentos/pregunta3_sensibilidad_entrega_final.py --parte sin_bess\|bess` (~45 min sin BESS) | `results/pregunta3_sensibilidad_entrega_final.json` |
+| Entrega final, pregunta 4 | `.venv/bin/python experimentos/pregunta4_relajacion_entrega_final.py` | `results/pregunta4_relajacion_entrega_final.json` |
 | Tabla 1 de [4] (PRELIMINAR) | `.venv/bin/python verificacion/preliminar_tabla1.py` | HC exacto vs relajado; `results/preliminar_tabla1.json` |
 | Pruebas de 24 h con BESS (PRELIMINAR) | Scripts en `verificacion/preliminar_24h_bess/` (ver su `README.md`) | `results/preliminar_24h_bess/*.jsonl` |
 | Modelo completo (PV + BESS, 24 h) | `.venv/bin/python modelo/misocp_hc_bess.py` | `results/hc_bess_results_m<mes>_<fecha>.json` |
@@ -162,7 +169,7 @@ Reproduce el flujo de potencia AC de pandapower con el modelo de optimización, 
 
 - En el escenario 1 el HC queda limitado a la vez por la exportación (4.6 MW) y por la tensión máxima (1.10 p.u.). En el escenario 2 lo limita solo la exportación.
 - En ambos escenarios, el modelo y el flujo AC coinciden a ~1e-10 p.u., y la brecha relativa es ≤ 1e-5. El MIP gap es ≤ 1e-6, así que es el óptimo global.
-- [4] reporta para el escenario 1 una exportación de 4600 kW, I_max = 259 A y V_max = 1.0934 p.u. Aquí la exportación y la corriente coinciden, pero V_max llega a 1.10 p.u. Queda por revisar en el PDF de [4] si su V_max se mide en otro punto o con otra ubicación del PV (ellos asignan 12 kW a la barra 9).
+- [4] reporta para el escenario 1 una exportación de 4600 kW, I_max = 259 A y V_max = 1.0934 p.u. Aquí la exportación y la corriente coinciden, pero V_max llega a 1.10 p.u. Con la ubicación que publica [4] (9: 12 kW, 18: 2959 kW, 22: 6291 kW), nuestro flujo AC da exportación 4600 kW e I_max = 259 A, igual que [4], pero V_max = 1.0987 p.u. en la barra 18, no 1.0934. La diferencia no viene de la ubicación del PV: debe estar en cómo [4] calcula o reporta la tensión. Falta revisarlo en el PDF de [4] (MDPI bloquea la lectura automática).
 
 ### Pregunta 1: HC con BESS (24 h) 🟡 (barrido completo; con 1–2 MW el rango entre cotas es amplio)
 
@@ -190,7 +197,7 @@ Caso: julio, exportación ≤ 4.6 MW, sin topes de PV activos, 2 baterías con a
 - **Por qué no se quitan las binarias μ.** Sin ellas, las baterías cargan y descargan a la vez a mediodía. Con η = 0.95 eso disipa ~10 % de su potencia, como una carga ficticia que permite instalar más PV. La cota con μ relajadas (`--cota-mu`) también es válida, pero resultó más débil que la horaria en todos los tamaños (12 868, 16 637 y 17 977 kW) y tarda 20 min.
 - **Qué no funcionó** para resolver el modelo completo: partir desde la solución sin BESS, `MIPFocus=3`, cotas explícitas en los flujos, una binaria por hora solo con sol y una ventana de horas con estado de carga inicial libre. Los scripts y resultados están en `verificacion/preliminar_24h_bess/` (PRELIMINAR).
 
-### Pregunta 2: PV concentrado vs distribuido 🟡 (carga base; falta 24 h)
+### Pregunta 2: PV concentrado vs distribuido ✅ (carga base y 24 h)
 
 `experimentos/pregunta2_concentrado_distribuido.py` parte de la Tabla 1 de [4] (escenario 1: carga base, sin BESS, modelo exacto). Cambia cuánto se puede concentrar el PV de tres formas: limitando el número de barras con PV, poniendo un tope de capacidad por barra, o repartiéndolo igual en las 32 barras. Todo se corre con y sin el límite de exportación de 4.6 MW. Son 30 casos: 22 se resuelven al óptimo y 8 se certifican sin resolver (ver el último punto). Todas las soluciones respetan los límites en el flujo AC de pandapower.
 
@@ -206,7 +213,83 @@ Caso: julio, exportación ≤ 4.6 MW, sin topes de PV activos, 2 baterías con a
 - **Sin el límite de exportación**, lo que limita son la tensión máxima y la corriente, y el óptimo cambia de barras (25, 18 y 2).
 - **Optimalidad con pocos sitios:** con 6 a 12 sitios Gurobi no cierra el gap en 2 min. Pero el HC no puede bajar al permitir más sitios, y ya con 2 sitios (3 sin límite de exportación) se alcanza el HC sin restricción de sitios. Por lo tanto esos casos tienen ese mismo HC óptimo, y el script lo certifica así, sin resolverlos.
 
+**En el modelo de 24 h** (`experimentos/pregunta2_24h.py`: julio, sin BESS, mismos tres tipos de concentración) la conclusión se mantiene. Con muchas barras candidatas Gurobi no cierra el gap en 5 min, así que el script consolida: una solución factible de un caso también lo es de cualquier caso menos restrictivo (más sitios o un tope mayor). Por eso algunos casos se reportan como rango [mejor solución, cota superior].
+
+| Caso (24 h, julio) | Con límite de exportación | Sin límite de exportación |
+|---|---|---|
+| PV en 1 sola barra | 12 147 kW, barra 6 (−3.9 %) | 13 778 kW, barra 2 (−4.9 %) |
+| **Óptimo** (sin restringir sitios) | **12 643 kW**: 2 barras (22, 18) | **14 484 – 14 897 kW**: 3 barras (25, 18, 20) |
+| 2 barras como máximo | 12 643 kW (el óptimo) | 14 414 kW (óptimo para 2 barras) |
+| Tope de 0.5 MW por barra (27–30 barras) | 12 073 kW (−4.5 %) | 14 107 kW (−2.6 %) |
+| Tope de 1–4 MW por barra | 12 418 – 12 632 kW (−1.8 a −0.1 %) | 14 336 – 14 897 kW |
+| PV uniforme en las 32 barras | 11 833 kW (−6.4 %) | 13 046 kW (−9.9 % o más) |
+
+- Con exportación ≤ 4.6 MW todo está resuelto al óptimo salvo los topes de 1, 2 y 4 MW, que quedan en rangos de 0.2–1 %.
+- Sin límite de exportación, el caso sin restricción de sitios queda en un rango de 2.9 %. La mejor solución tiene 3 barras.
+- La figura está en `results/figures/pregunta2/hc_concentrado_distribuido_24h.png`.
+
+### Pregunta 3: sensibilidad de los parámetros 🟡
+
+`experimentos/pregunta3_sensibilidad.py` cambia un parámetro a la vez, con el modelo exacto, y valida cada solución con el flujo AC. Figura: `results/figures/pregunta3/sensibilidad.png`.
+
+**Límites de red** (Tabla 1 de [4], escenario 1, carga base; caso base: exportación 4.6 MW, V_max 1.10 p.u., I_max 300 A → 9266 kW):
+
+| Parámetro | Valores → HC |
+|---|---|
+| Exportación máxima | 0 MW → 4203 kW · 2.3 MW → 6846 · **4.6 MW → 9266** · 6.9 MW o más → 10 536 (deja de estar activa) |
+| V_max, con exportación ≤ 4.6 MW | 1.05 → 8861 kW · 1.06 → 8952 · 1.08 → 9103 · **1.10 → 9266** |
+| V_max, sin límite de exportación | 1.05 → 10 279 kW · 1.06 → 10 336 · 1.08 → 10 431 · 1.10 → 10 536 |
+| I_max, con exportación ≤ 4.6 MW | 200 A → 7765 kW · 250 → 9128 · **300 → 9266** · 400 → 9368 |
+| I_max, sin límite de exportación | 200 A → 7765 kW · 250 → ≥ 9183 · 300 → 10 536 · 400 → 13 099 |
+
+- **El límite de exportación es el parámetro dominante.** Cada MW de exportación agrega más de 1 MW de HC (2.3 MW → +2.6 MW), porque también crecen las pérdidas. Sobre ~5.8 MW deja de estar activo y mandan la tensión y la corriente.
+- **V_max influye poco**: entre 1.05 y 1.10 p.u. el HC cambia 2.5–4.6 %. Lo que más cambia es dónde se instala el PV.
+- **I_max importa mucho sin límite de exportación** (~27 kW de HC por A). Con el límite, pasa a dominar solo si baja de ~250 A.
+
+**Perfil de PV por mes** (24 h, sin BESS, exportación ≤ 4.6 MW; la demanda es siempre la del 31 de julio): el HC va de 11 173 kW (octubre, α máx 0.813) a 13 075 kW (junio, α máx 0.697). En todos los meses se cumple **HC × α_max ≈ 9.1 MW**: el HC lo fija la hora de más sol, en la que la inyección de PV llega al límite. El PV siempre queda en las barras 22 y 18. Para diseñar hay que mirar el mes con el α más alto (octubre), no julio: con el perfil de julio el HC es 13 % mayor que con el de octubre.
+
+**Parámetros de la BESS** (24 h, julio, 2 × 0.5 MW en 32 y 33, PV en 18 y 22; cota inferior con 5 min por caso, gap ≤ 0.2 %; caso base τ = 2 h, η = 0.95, SoC 10–90 % → 13 952 kW):
+
+| Cambio | HC | Frente al caso base |
+|---|---|---|
+| τ = 1 h (0.5 MWh por batería) | 13 426 kW | −3.8 % |
+| τ = 4 h (2 MWh por batería) | 14 110 kW | +1.1 % |
+| η = 0.90 | 13 994 kW | +0.3 % |
+| η = 1.00 | 13 899 kW | −0.4 % |
+| SoC 20–80 % | 13 687 kW | −1.9 % |
+| SoC 0–100 % | 14 070 kW | +0.8 % |
+
+- **Lo que importa es la energía útil de la batería, no su potencia.** Con τ = 1 h, la batería de 0.5 MW / 0.5 MWh da 13 426 kW, lo mismo que la de 0.25 MW / 0.5 MWh de la pregunta 1 (13 425 kW). Más energía útil (τ mayor o ventana de SoC más amplia) sube el HC, con rendimiento decreciente.
+- **La eficiencia casi no cambia el HC** (< 0.5 %, del orden del gap). Una eficiencia menor lo sube un poco, porque las pérdidas de la batería absorben PV.
+- **c_deg no cambia el HC**: con el objetivo max ΣP_PV no aparece en el modelo.
+- Falta, si se quiere: repetir el bloque de la BESS con otros tamaños y con más tiempo por caso.
+
+### Pregunta 4: error de la relajación cónica ✅
+
+`experimentos/pregunta4_relajacion.py` resuelve cada caso con el modelo exacto (MIQCP, P² + Q² = v·l) y con la relajación del informe (MISOCP, P² + Q² ≤ v·l), con el mismo objetivo (max ΣP_PV). Luego instala el PV que eligió el relajado en un flujo AC de pandapower para ver si la red real lo soporta. El relajado se resuelve con tolerancias de barrera de 1e-10, para que la brecha medida no sea ruido numérico.
+
+| Caso | HC exacto | HC relajado | Error | Pérdidas ficticias del relajado | El PV del relajado en el flujo AC |
+|---|---|---|---|---|---|
+| Tabla 1, esc. 1, exportación ≤ 4.6 MW | 9266 kW | 11 818 kW | **+27.6 %** | 2707 kW | exporta 6851 kW, V 1.143 p.u., I 350 A |
+| Tabla 1, esc. 1, sin límite | 10 536 kW | 11 818 kW | +12.2 % | 2710 kW | V 1.143 p.u., I 351 A |
+| Tabla 1, esc. 2, exportación ≤ 4.6 MW | 8554 kW | 11 663 kW | **+36.3 %** | 2785 kW | exporta 7587 kW, I 366 A |
+| Tabla 1, esc. 2, sin límite | 10 096 kW | 11 673 kW | +15.6 % | 2712 kW | I 366 A |
+| 24 h julio, sin BESS, exportación ≤ 4.6 MW | 12 643 kW | 16 334 kW | **+29.2 %** | 1827 kW (media) | exporta 6924 kW, V 1.144 p.u., I 352 A |
+| 24 h julio, sin BESS, sin límite | 14 484 – 14 897 kW (pregunta 2) | 16 334 kW | +9.6 a +12.8 % | 1939 kW (media) | V 1.144 p.u., I 352 A |
+| 24 h julio, 2 BESS de 50 kW | 12 818 kW (pregunta 1) | 16 473 kW | **+28.5 %** | 1531 kW (media) | exporta 6924 kW, V 1.144 p.u., I 352 A |
+
+- **La relajación no es exacta en ningún caso con PV, y su error es grande: entre 10 y 36 %.** La brecha cónica relativa llega a 1, es decir, hay ramas con corriente l > 0 y casi sin flujo: pura corriente ficticia. Solo es exacta sin PV, en el caso base de la Etapa 1, donde el objetivo minimiza las pérdidas.
+- **Toda solución relajada viola los límites reales.** En el flujo AC, el PV que elige el relajado lleva la tensión a 1.14 p.u. y la corriente a 350–366 A (límite 300 A), y exporta 6.9–7.6 MW cuando el límite es 4.6 MW.
+- **El HC relajado no depende del límite de exportación** (11 818 kW con y sin él; 16 334 kW en 24 h). El relajado disipa el PV sobrante en pérdidas ficticias hasta que lo detiene el límite térmico (l ≤ I_max²). Por eso el error es mayor justo cuando el límite de exportación está activo (28–36 %), que es el caso del proyecto.
+- **Tampoco sirve como cota superior útil.** Es una cota válida del HC exacto, pero muy holgada: con 2 × 50 kW da 16 473 kW, frente al óptimo demostrado de 12 818 kW. La cota horaria de la pregunta 1 es mucho más ajustada.
+- El exacto de 24 h sin límite de exportación no cerró el gap en 10 min. Con las soluciones de la pregunta 2 en 24 h, su HC óptimo está entre 14 484 y 14 897 kW, así que el error del relajado está entre 9.6 y 12.8 %.
+
 ### Entrega final: experimentos de 24 h con BESS ✅ (corridos; faltan figuras e informe)
+
+**Dos versiones en paralelo de las preguntas 2–4.** Las preguntas 2 (24 h), 3 y 4 se hicieron dos veces, por separado. Las de arriba (`pregunta2_24h.py`, `pregunta3_sensibilidad.py`, `pregunta4_relajacion.py`) son una versión; las de esta sección llevan el sufijo `_entrega_final` (scripts y JSON) y usan `experimentos/comun_24h.py` y `sin_bess_24h.py`. Donde se cruzan, coinciden:
+- **Pregunta 2 en 24 h:** mismo HC con límite de exportación (12 643 kW en 22 y 18), con PV en una barra (12 147–12 148 kW) y uniforme (11 833 kW). Sin límite, esta versión resuelve el óptimo (14 484 kW, gap 6e-5, resolviendo solo las horas críticas), lo que cierra el rango 14 484 – 14 897 kW de la otra.
+- **Pregunta 3:** son complementarias. La otra varía los límites de red (Tabla 1), el mes y τ; esta varía la exportación y el fp en 24 h, y η y el SoC con BESS. Con 2 × 0.5 MW en 32 y 33 coinciden: base 13 952 kW, η = 0.90 → 13 994 vs 14 000 kW, SoC 20–80 % → 13 687 kW en ambas.
+- **Pregunta 4:** ambas dan 12 643 → 16 334 kW (+29.2 %) en 24 h sin BESS con límite. Sin límite, el óptimo de esta versión fija el error en +12.8 % (la otra da 9.6–12.8 %). La otra agrega la Tabla 1 y 2 × 50 kW; esta, 2 × 0.5 y 2 × 2 MW.
 
 **Método de la pregunta 1 (decisión del equipo): combinar los dos enfoques** con la configuración de la sección anterior: 2 BESS de tamaño fijo y la restricción (19) del informe para el SoC final.
 - **Cota superior:** la cota horaria de `pregunta1_bess_cotas.py` (`comun_24h.cota_horaria`). Es válida para el problema completo, con PV y BESS en cualquier barra, y no depende de τ.
@@ -266,7 +349,7 @@ Valores en kW.
 
 Coincide a ±0.3 % con el barrido de arriba con la misma energía total, así que el SoC cíclico vs (19) casi no cambia el HC.
 
-**Pregunta 2 en 24 h** (`results/pregunta2_24h.json`): mismo patrón que en carga base.
+**Pregunta 2 en 24 h** (`results/pregunta2_24h_entrega_final.json`, `experimentos/pregunta2_24h_entrega_final.py`): mismo patrón que en carga base.
 
 | Caso | Con límite de exportación | Sin límite de exportación |
 |---|---|---|
@@ -274,7 +357,7 @@ Coincide a ±0.3 % con el barrido de arriba con la misma energía total, así qu
 | **Óptimo** | **12 643 kW**: 2 barras (22, 18) | **14 484 kW**: 3 barras (25, 18, 2) |
 | PV uniforme en las 32 barras | 11 833 kW (−6.4 %) | 13 047 kW (−9.9 %) |
 
-**Pregunta 3 sin BESS** (`results/pregunta3_sensibilidad.json`):
+**Pregunta 3 sin BESS** (`results/pregunta3_sensibilidad_entrega_final.json`, `experimentos/pregunta3_sensibilidad_entrega_final.py`):
 
 | Límite de exportación | 0 MW | 2.3 MW | **4.6 MW** | 6.9 MW | sin límite |
 |---|---|---|---|---|---|
@@ -298,7 +381,7 @@ Coincide a ±0.3 % con el barrido de arriba con la misma energía total, así qu
 - **La energía útil sí importa:** el HC cambia de forma casi lineal con la ventana de SoC.
 - **El fp fijo 0.95 deja el HC por debajo del caso sin BESS con fp unitario**, porque la corriente llega primero a 300 A.
 
-**Pregunta 4 en 24 h** (`results/pregunta4_relajacion.json`): MIQCP exacto vs MISOCP relajado del informe.
+**Pregunta 4 en 24 h** (`results/pregunta4_relajacion_entrega_final.json`, `experimentos/pregunta4_relajacion_entrega_final.py`): MIQCP exacto vs MISOCP relajado del informe.
 
 | Caso | Exacto | Relajado | Sobreestimación | Pérdidas ficticias | Flujo AC del PV relajado |
 |---|---|---|---|---|---|
@@ -389,10 +472,12 @@ Se generan con `.venv/bin/python presentacion/graficos_avance.py` (~7 s) en `res
 - [x] Barrido de tamaños de BESS con `experimentos/pregunta1_bess_cotas.py --tamanos ...` (~1 h por tamaño; el JSON conserva los tamaños ya calculados): 0.05, 0.25, 0.5, 1 y 2 MW.
 - [ ] Cerrar el rango entre cotas con baterías grandes (10 % con 1 MW, 23 % con 2 MW): haría falta una cota superior que considere la energía de la BESS, y una cota inferior mejor para 2 MW (la mejor corrida terminó con gap 5 %).
 - [x] Generación concentrada vs distribuida (pregunta 2), en carga base: ver resultados arriba.
-- [ ] Pregunta 2 en el modelo de 24 h (sin BESS, ~2 min por corrida).
-- [ ] Análisis de sensibilidad de los parámetros (pregunta 3): eficiencias, DoD, τ, c_deg, tamaño de BESS, límites de exportación.
-- [ ] Cuantificar el error de la relajación frente al MIQCP (pregunta 4); los resultados preliminares de arriba ya lo adelantan.
+- [x] Pregunta 2 en el modelo de 24 h, sin BESS: la conclusión de carga base se mantiene (2–3 barras; uniforme −6 a −10 %).
+- [x] Análisis de sensibilidad (pregunta 3): límites de red, perfil de PV por mes y parámetros de la BESS (τ, η, SoC; c_deg no influye).
+- [ ] Pregunta 3, opcional: el bloque de la BESS con otros tamaños y más tiempo por caso; la pregunta 2 con BESS.
+- [x] Cuantificar el error de la relajación frente al MIQCP (pregunta 4): +10 a +36 %, y toda solución relajada viola los límites en el flujo AC. Ver resultados arriba.
 - [ ] Gráficos de despacho, perfiles de tensión y ciclado de baterías.
+- [ ] Decidir qué versión de las preguntas 2–4 va al informe, o cómo combinarlas (ver §5, Entrega final).
 
 **Informe**
 - [ ] Reflejar las decisiones de la Etapa 2: modelo exacto (MIQCP), objetivo ΣP_PV, sin vertimiento y V 0.9–1.1 p.u.
