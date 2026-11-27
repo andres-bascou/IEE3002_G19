@@ -171,7 +171,9 @@ Reproduce el flujo de potencia AC de pandapower con el modelo de optimización, 
 - En ambos escenarios, el modelo y el flujo AC coinciden a ~1e-10 p.u., y la brecha relativa es ≤ 1e-5. El MIP gap es ≤ 1e-6, así que es el óptimo global.
 - [4] reporta para el escenario 1 una exportación de 4600 kW, I_max = 259 A y V_max = 1.0934 p.u. Aquí la exportación y la corriente coinciden, pero V_max llega a 1.10 p.u. Con la ubicación que publica [4] (9: 12 kW, 18: 2959 kW, 22: 6291 kW), nuestro flujo AC da exportación 4600 kW e I_max = 259 A, igual que [4], pero V_max = 1.0987 p.u. en la barra 18, no 1.0934. La diferencia no viene de la ubicación del PV: debe estar en cómo [4] calcula o reporta la tensión. Falta revisarlo en el PDF de [4] (MDPI bloquea la lectura automática).
 
-### Pregunta 1: HC con BESS (24 h) 🟡 (barrido completo; con 1–2 MW el rango entre cotas es amplio)
+### Pregunta 1: HC con BESS (24 h) ✅ (primera versión: cotas)
+
+> **Resultados finales de la pregunta 1:** ver «Entrega final» más abajo (`experimentos/pregunta1_bess.py`). Usan la misma cota superior horaria de esta sección, pero buscan la solución enumerando los sitios de BESS (28 pares más los casos de esta sección), y agregan τ = 4 h y el caso sin límite de exportación. Con τ = 2 h y el límite de exportación dan lo mismo que esta sección salvo en 2 × 2 MW (15 859 vs 15 871 kW, pendiente de revisar). Esta sección queda como registro del método de cotas.
 
 El modelo exacto de 24 h con BESS no cierra el gap en 10–20 min: tiene 1600 binarias y 768 igualdades no convexas. Por eso `experimentos/pregunta1_bess_cotas.py` no lo resuelve completo, sino que **acota su HC óptimo por los dos lados**:
 
@@ -228,7 +230,7 @@ Caso: julio, exportación ≤ 4.6 MW, sin topes de PV activos, 2 baterías con a
 - Sin límite de exportación, el caso sin restricción de sitios queda en un rango de 2.9 %. La mejor solución tiene 3 barras.
 - La figura está en `results/figures/pregunta2/hc_concentrado_distribuido_24h.png`.
 
-### Pregunta 3: sensibilidad de los parámetros 🟡
+### Pregunta 3: sensibilidad de los parámetros ✅ (más la versión de «Entrega final»)
 
 `experimentos/pregunta3_sensibilidad.py` cambia un parámetro a la vez, con el modelo exacto, y valida cada solución con el flujo AC. Figura: `results/figures/pregunta3/sensibilidad.png`.
 
@@ -282,7 +284,7 @@ Caso: julio, exportación ≤ 4.6 MW, sin topes de PV activos, 2 baterías con a
 - **Toda solución relajada viola los límites reales.** En el flujo AC, el PV que elige el relajado lleva la tensión a 1.14 p.u. y la corriente a 350–366 A (límite 300 A), y exporta 6.9–7.6 MW cuando el límite es 4.6 MW.
 - **El HC relajado no depende del límite de exportación** (11 818 kW con y sin él; 16 334 kW en 24 h). El relajado disipa el PV sobrante en pérdidas ficticias hasta que lo detiene el límite térmico (l ≤ I_max²). Por eso el error es mayor justo cuando el límite de exportación está activo (28–36 %), que es el caso del proyecto.
 - **Tampoco sirve como cota superior útil.** Es una cota válida del HC exacto, pero muy holgada: con 2 × 50 kW da 16 473 kW, frente al óptimo demostrado de 12 818 kW. La cota horaria de la pregunta 1 es mucho más ajustada.
-- El exacto de 24 h sin límite de exportación no cerró el gap en 10 min. Con las soluciones de la pregunta 2 en 24 h, su HC óptimo está entre 14 484 y 14 897 kW, así que el error del relajado está entre 9.6 y 12.8 %.
+- El exacto de 24 h sin límite de exportación no cerró el gap en 10 min. Con las soluciones de la pregunta 2 en 24 h, su HC óptimo está entre 14 484 y 14 897 kW, así que el error del relajado está entre 9.6 y 12.8 %. La versión de «Entrega final» resolvió ese óptimo (14 484 kW, gap 6e-5), así que el error es **+12.8 %**.
 
 ### Entrega final: experimentos de 24 h con BESS ✅ (corridos; faltan figuras e informe)
 
@@ -478,6 +480,12 @@ Se generan con `.venv/bin/python presentacion/graficos_avance.py` (~7 s) en `res
 - [x] Cuantificar el error de la relajación frente al MIQCP (pregunta 4): +10 a +36 %, y toda solución relajada viola los límites en el flujo AC. Ver resultados arriba.
 - [ ] Gráficos de despacho, perfiles de tensión y ciclado de baterías.
 - [ ] Decidir qué versión de las preguntas 2–4 va al informe, o cómo combinarlas (ver §5, Entrega final).
+- [ ] Revisar el despacho de 2 × 2 MW de `pregunta1_bess_cotas.py` (15 871 kW frente a 15 859 kW en `pregunta1_bess.py`): ¿una batería carga mientras la otra descarga? (ver §5, Entrega final).
+
+**Entrega final**
+- [ ] Figuras de resultados de las preguntas 1–4 para el informe y la presentación (p.ej. HC vs tamaño de BESS; las de despacho y tensiones están arriba).
+- [ ] Informe final como artículo científico: ≤ 8 páginas, doble columna IEEE (enunciado, Sec. 3.3).
+- [ ] Presentación (≤ 12 min, todos los integrantes): diapositivas en PDF y video, en la carpeta compartida.
 
 **Informe**
 - [x] Reflejar las decisiones de la Etapa 2: modelo exacto (MIQCP), objetivo ΣP_PV, sin vertimiento y V 0.9–1.1 p.u.
