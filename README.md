@@ -489,10 +489,10 @@ Se generan con `.venv/bin/python presentacion/graficos_avance.py` (~7 s) en `res
 
 **Informe**
 - [x] Reflejar las decisiones de la Etapa 2: modelo exacto (MIQCP), objetivo ΣP_PV, sin vertimiento y V 0.9–1.1 p.u.
-- [ ] Corregir el argumento de exactitud de la Sec. II.G: la relajación no es exacta solo porque las cargas sean constantes.
-- [ ] Cambiar el umbral de (28) a una brecha relativa.
-- [ ] Notación: l = |I|² (no |l|²), Q_PV ∈ ℝ vs (16), y el texto de la restricción 15 ("= 1" vs ≤ z_j).
-- [ ] Indicar los valores usados de V_min, V_max y P_S,ref, y el significado y las unidades de c_deg.
+- [x] Corregir el argumento de exactitud de la Sec. II.G: la relajación no es exacta solo porque las cargas sean constantes.
+- [x] Cambiar el umbral de (28) a una brecha relativa.
+- [x] Notación: l = |I|² (no |l|²), Q_PV ∈ ℝ vs (16), y el texto de la restricción 15 ("= 1" vs ≤ z_j).
+- [x] Indicar los valores usados de V_min, V_max y P_S,ref, y el significado y las unidades de c_deg.
 
 ## 8. Cómo colaborar
 
